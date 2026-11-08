@@ -12,8 +12,14 @@ import { readXlsx } from './xlsx.js'
 
 const isId = n => Number.isInteger(n) && n >= 80000 && n < 1000000
 
-const DONE_WORDS = /^(已完成|已达成|完成|达成|已领取|finished|done|completed|true|是|√|✓|✔|1)$/i
-const UNDONE_WORDS = /^(未完成|未达成|unfinished|invalid|false|否|×|0)$/i
+/**
+ * 状态文字 → 是否完成。各家写法：椰羊表格「已完成 / 未完成」；
+ * YaeAchievement 的 csv「已完成 / 已完成但未领取奖励 / 未完成 / 未知」，英文版「Reward not taken / Finished / Unfinished / Invalid」
+ * （注意「已完成但未领取奖励」也是已完成，不能看到「未」字就算未完成）
+ */
+const UNDONE_WORDS = /^(未完成.*|未达成.*|未知|无效|unfinished|invalid|false|否|×|0)$/i
+const DONE_WORDS = /完成|达成|领取|finished|done|completed|reward|^(true|是|√|✓|✔|1)$/i
+const statusDone = st => !UNDONE_WORDS.test(st) && DONE_WORDS.test(st)
 
 function result (format, replace) {
   return { format, replace, done: new Map(), undone: new Set() }
@@ -32,10 +38,10 @@ export function parseRows (rows, format = '表格') {
     const id = Number(String(row[idCol] ?? '').trim())
     if (!isId(id)) continue
     const st = stCol < 0 ? '' : String(row[stCol] ?? '').trim()
-    if (stCol >= 0 && (UNDONE_WORDS.test(st) || /未/.test(st))) {
-      out.undone.add(id)
-    } else if (stCol < 0 || DONE_WORDS.test(st) || /完成|达成/.test(st)) {
-      out.done.set(id, toSeconds(timeCol < 0 ? '' : row[timeCol]))
+    if (stCol < 0 || statusDone(st)) {
+      // YaeAchievement 的 csv 不给单元格加引号，描述里带英文逗号时后面的列会错位；完成时间是最后一列，就从行尾取
+      const time = timeCol === header.length - 1 ? row[row.length - 1] : row[timeCol]
+      out.done.set(id, toSeconds(timeCol < 0 ? '' : time))
     } else {
       out.undone.add(id)
     }

@@ -2,32 +2,28 @@ import fs from 'node:fs'
 import path from 'node:path'
 import { getConfig, dataRoot, ensureDir, pluginName, pluginRoot, norm } from '../model/config.js'
 import { renderPage } from '../model/render.js'
+import { helpSections, importSteps, importWays, importNotes, helpText, importHelpText } from '../model/help.js'
 import { getAchievements, syncAchievements, syncing, formatSync, scheduleAchievementSync } from '../model/data.js'
-import { parseFile, parseText } from '../model/importer.js'
+import { parseFile, parseText, parseJson } from '../model/importer.js'
 import { loadRecord, applyImport, markIds, deleteRecord, toUiaf } from '../model/store.js'
+import { mysAchievementCount, compareText } from '../model/mys.js'
 
 /** 原神成就：录入、查漏、统计、查询。成就数据来自 genshin-db，见 model/data.js */
 
 const GAME = 'gs'
 const MAX_FILE = 10 * 1024 * 1024
+const HELP_TPL = path.join(pluginRoot, 'resources', 'html', 'help.html')
+const IMPORT_PROMPT = '请发送成就文件（json/xlsx/csv）或椰羊分享链接'
+
+/** 贴进来的文字是不是一份存档（JSON，或者带 ID 表头的 CSV）；否则当作要标记的成就 ID / 名称 */
+const looksLikeArchive = text => /^[[{]/.test(text) || /^\uFEFF?"?(id|编号)"?\s*[,\t]/i.test(text)
 
 const pageSize = () => Math.max(10, Number(getConfig().pageSize) || 40)
+/** 查漏、统计、录入时顺带和米游社的成就达成数核对（需要原神插件和绑定的 UID，查不到就不显示） */
+const mysCompare = () => getConfig().mysCompare !== false
 
 scheduleAchievementSync(GAME, Math.min(23, Math.max(0, Number(getConfig().syncHour) || 0)))
 
-const HELP = [
-  '【成就 · 原神】数据整理自 genshin-db，按游戏内成就 ID 记录',
-  '#成就录入：发送后再发椰羊导出的 xlsx 表格或 UIAF json 文件（群里官方 Bot 收不到不带 @ 的文件，建议私聊）；',
-  '　也可以直接 #成就录入 后面贴 UIAF JSON，或贴一串成就 ID（只追加不覆盖）',
-  '#成就查漏：列出没完成的成就；后面可以加特辑名、版本、隐藏、页码，如 #成就查漏 至冬、#成就查漏 6.0、#成就查漏 2',
-  '#成就统计：各特辑完成进度',
-  '#成就查询 关键词：按名称、描述或 ID 搜索，如 #成就查询 甘撒、#成就 登月；发特辑名（#成就查询 天地万象）看整个特辑',
-  '#成就完成 名称或ID / #成就取消 名称或ID：手动标记，可以一次写多个（空格分开）',
-  '#成就导出：导出成 UIAF json 文件（可导入椰羊、胡桃工具箱）',
-  '#清空成就记录：删除自己的成就记录',
-  '#成就更新：立即从 genshin-db 同步成就数据（主人；插件每天也会自动同步）',
-  '#更新成就插件：从 git 更新插件本身并重启（主人）'
-].join('\n')
 
 const fmtTime = ms => ms ? new Date(ms).toLocaleString('zh-CN', { hour12: false, timeZone: 'Asia/Shanghai' }) : ''
 
@@ -50,7 +46,8 @@ function summarize (data, rec) {
     }
   }
   const total = data.list.length
-  return { done, total, missing: total - done, pct: percent(done, total), primoDone, primoMissing: primoAll - primoDone }
+  // recorded：记录里的全部 ID 数（含成就数据里还没有的新成就），和米游社的达成数比较用
+  return { done, total, missing: total - done, pct: percent(done, total), primoDone, primoMissing: primoAll - primoDone, recorded: rec?.done.size || 0 }
 }
 
 /** 按特辑分组：groups 里每项带 done/total/missing/primoMissing，items 是传入的成就 */
@@ -100,6 +97,9 @@ function search (data, q) {
   return byTitle.length ? byTitle : data.list.filter(a => norm(a.desc).includes(k))
 }
 
+/** 成就显示名：多阶段成就带上第几阶段，如「动物园大亨（1/3）」 */
+const label = a => a ? (a.stages > 1 ? `${a.title}（${a.stage}/${a.stages}）` : a.title) : ''
+
 const who = e => {
   const name = e.sender?.card || e.sender?.nickname || ''
   return name ? `${name}` : `用户 ${e.user_id}`
@@ -141,6 +141,36 @@ async function download (url) {
   return buf
 }
 
+/**
+ * 椰羊分享链接：YaeAchievement 选「椰羊」导出、或者在椰羊网页上分享时，会得到
+ * https://cocogoat.work/achievement?memo=xxxxxxxxx 这样的链接，memo 是 9 位的分享码。
+ * 椰羊网页自己就是从 77.cocogoat.cn/v2/memo/<分享码> 取回 UIAF 数据的，这里照做，用户不用传文件
+ */
+const MEMO_LINK = /cocogoat\.(?:work|cn)\/achievement\/?\?(?:[^\s#]*&)?memo=([A-Za-z0-9]{9})(?![A-Za-z0-9])/
+const MEMO_APIS = ['https://77.cocogoat.cn', 'https://77.cocogoat.work']
+
+function memoKey (text) {
+  const m = String(text).match(MEMO_LINK)
+  if (m) return m[1]
+  // 只发分享码本身：9 位字母数字，至少带一个字母（和成就 ID 区分开）
+  return /^[A-Za-z0-9]{9}$/.test(text) && /[A-Za-z]/.test(text) ? text : ''
+}
+
+async function fetchMemo (key) {
+  let lastErr
+  for (const api of MEMO_APIS) {
+    try {
+      const res = await fetch(`${api}/v2/memo/${key}`, { signal: AbortSignal.timeout(20000) })
+      if (res.status === 404) throw new Error('分享链接不存在或已过期，请重新导出')
+      if (!res.ok) throw new Error(`HTTP ${res.status}`)
+      return await res.json()
+    } catch (err) {
+      lastErr = err
+    }
+  }
+  throw new Error(`椰羊分享链接读取失败：${lastErr?.message}`)
+}
+
 /** 当前消息、以及它回复的那条消息里的文件段 */
 async function fileSegments (e) {
   const segs = (Array.isArray(e.message) ? e.message : []).filter(m => m?.type === 'file')
@@ -164,13 +194,16 @@ export class Achievement extends plugin {
       priority: cfg.priority ?? -110,
       rule: [
         { reg: '^#(原神)?成就(帮助|菜单|help|功能|图鉴)$', fnc: 'help' },
+        { reg: '^#(原神)?成就(录入|导入)(帮助|教程|说明)$', fnc: 'importHelp' },
         { reg: '^#(原神)?成就(数据)?(强制)?更新$', fnc: 'sync', permission: 'master' },
+        { reg: '^#(原神)?成就(取消|撤销)(录入|完成|标记)?\\s*(.*)$', fnc: 'markUndone' },
         { reg: '^#(原神)?成就(录入|导入|上传)([\\s\\S]*)$', fnc: 'importCmd' },
         { reg: '^#(原神)?成就(查漏|缺失|未完成)(.*)$', fnc: 'missing' },
         { reg: '^#(原神)?(我的)?成就(统计|进度|总览)?$', fnc: 'stats' },
+        // 旧写法，帮助里不再写，留着兼容：#成就完成 xxx 等于 #成就录入 xxx
         { reg: '^#(原神)?成就(完成|标记|打卡)\\s*(.+)$', fnc: 'markDone' },
-        { reg: '^#(原神)?成就(取消|撤销)(完成|标记)?\\s*(.+)$', fnc: 'markUndone' },
         { reg: '^#(原神)?成就导出$', fnc: 'exportCmd' },
+        { reg: '^#(原神)?成就(对比|核对|校对)$', fnc: 'compare' },
         { reg: '^#(原神)?(清空|删除)(我的)?成就(记录|存档)$', fnc: 'clear' },
         { reg: '^#(原神)?成就(查询|搜索|查找)?\\s*(.+)$', fnc: 'query' }
       ]
@@ -186,8 +219,38 @@ export class Achievement extends plugin {
     return null
   }
 
+  /** 帮助图；渲染失败时退回纯文字（每行不以 # 开头，免得 QQ 官方 Bot 当成 Markdown 标题） */
   async help () {
-    return this.reply(HELP)
+    return this.helpImage('help', helpText)
+  }
+
+  async importHelp () {
+    return this.helpImage('import', importHelpText)
+  }
+
+  async helpImage (mode, fallback) {
+    const data = getAchievements(GAME)
+    let version = ''
+    try {
+      version = JSON.parse(fs.readFileSync(path.join(pluginRoot, 'package.json'), 'utf8')).version || ''
+    } catch {}
+    try {
+      const imgs = await renderPage(`help_${mode}`, {
+        title: mode === 'import' ? '成就录入帮助' : '成就帮助',
+        mode,
+        sections: helpSections,
+        steps: importSteps,
+        ways: importWays,
+        notes: importNotes,
+        total: data?.list.length || 0,
+        syncedAt: fmtTime(data?.syncedAt),
+        version
+      }, HELP_TPL)
+      return sendImages(this.e, imgs, '成就帮助')
+    } catch (err) {
+      logger.error(err)
+      return this.reply(fallback())
+    }
   }
 
   async sync () {
@@ -202,17 +265,18 @@ export class Achievement extends plugin {
 
   // ---------- 录入 ----------
 
+  /**
+   * #成就录入：
+   * - 什么都不带：等用户发文件（2 分钟）
+   * - 带文件、椰羊分享链接、文件链接、JSON / CSV 文本：当作存档导入
+   * - 带成就 ID 或成就名：把这些成就标记为已完成（#成就取消录入 撤销）
+   */
   async importCmd () {
     const text = this.e.msg.replace(/^#(原神)?成就(录入|导入|上传)/, '').trim()
     if (await this.tryImport(text)) return true
+    if (text) return this.mark(true, text)
     this.setContext('importContext', false, 120)
-    return this.reply([
-      '请在 2 分钟内发送成就存档：',
-      '· 椰羊小程序导出的 xlsx 表格文件',
-      '· 或 UIAF 格式的 json 文件 / 直接粘贴 JSON 文本（椰羊、胡桃工具箱、寻空等都能导出）',
-      '· 或一串成就 ID（只追加，不覆盖已有记录）',
-      '发送「取消」退出。群里官方 Bot 收不到不带 @ 的文件，建议私聊发送'
-    ].join('\n'))
+    return this.reply(IMPORT_PROMPT)
   }
 
   async importContext () {
@@ -227,11 +291,17 @@ export class Achievement extends plugin {
       this.finish('importContext')
       return this.reply('已退出成就录入，需要时再发 #成就录入')
     }
-    if (await this.tryImport(text.replace(/^#(原神)?成就(录入|导入|上传)/, '').trim())) {
+    const rest = text.replace(/^#(原神)?成就(录入|导入|上传)/, '').trim()
+    if (await this.tryImport(rest)) {
       this.finish('importContext')
       return true
     }
-    return this.reply('没收到文件或可识别的内容，请发送 xlsx / json 文件，或发送「取消」退出')
+    // 等文件的时候又发了 #成就录入 ID：照常标记
+    if (rest && rest !== text) {
+      this.finish('importContext')
+      return this.mark(true, rest)
+    }
+    return this.reply(`没收到文件，${IMPORT_PROMPT}，发「取消」退出`)
   }
 
   /** 从当前消息里找文件 / 链接 / 文本并导入；什么都没有返回 false */
@@ -244,17 +314,18 @@ export class Achievement extends plugin {
       if (segs.length) {
         const seg = segs[0]
         const url = await fileUrl(e, seg)
-        if (!url) throw new Error('当前适配器拿不到文件下载地址，可以把 JSON 内容直接粘贴发送')
+        if (!url) throw new Error('当前适配器拿不到文件下载地址，可以改发椰羊分享链接（见 #成就录入帮助）')
         from = seg.name || '文件'
         parsed = parseFile(await download(url), from)
+      } else if (memoKey(text)) {
+        from = '椰羊分享链接'
+        parsed = parseJson(await fetchMemo(memoKey(text)))
       } else if (/^https?:\/\/\S+$/.test(text)) {
         from = '链接'
         parsed = parseFile(await download(text), text)
-      } else if (text) {
+      } else if (looksLikeArchive(text)) {
         from = '文本'
         parsed = parseText(text)
-        // 既不是 JSON 也没有成就 ID 的文字，当作没发存档
-        if (!parsed.replace && !parsed.done.size) return false
       } else {
         return false
       }
@@ -277,6 +348,10 @@ export class Achievement extends plugin {
       `当前进度 ${sum.done}/${sum.total}（${sum.pct}%），未完成 ${sum.missing} 个，还能拿 ${sum.primoMissing} 原石`
     ]
     if (unknown) lines.push(`有 ${unknown} 个 ID 不在当前成就数据里（可能是新版本成就，数据更新后会自动算上）`)
+    if (mysCompare()) {
+      const mys = await mysAchievementCount(e, { silent: true, force: true })
+      if (!mys.error) lines.push(`米游社显示已达成 ${mys.count} 个，${compareText(mys.count, record.done.size).text}`)
+    }
     lines.push('发送 #成就查漏 查看未完成的成就')
     await this.reply(lines.join('\n'))
     return true
@@ -350,7 +425,7 @@ export class Achievement extends plugin {
     const data = await this.data()
     if (!data) return true
     const rec = loadRecord(GAME, this.e.user_id)
-    if (!rec) return this.reply(`你还没有录入成就。\n${HELP}`)
+    if (!rec) return this.reply('你还没有录入成就，发送 #成就录入帮助 看怎么导出存档')
     return this.renderSend('stats', {
       mode: 'stats',
       title: '成就统计',
@@ -408,13 +483,23 @@ export class Achievement extends plugin {
     return lines.join('\n')
   }
 
+  /** 查漏、统计图上的米游社核对结果；关掉了、没记录或查不到时返回 null */
+  async mysView (rec) {
+    if (!rec || !mysCompare()) return null
+    const mys = await mysAchievementCount(this.e, { silent: true })
+    return mys.error ? null : { ...mys, ...compareText(mys.count, rec.done.size) }
+  }
+
   async renderSend (id, view, data, rec) {
     try {
+      // 先核对米游社（10 分钟内有缓存；静默查询最多等 8 秒，查不到就不显示），再出图
+      const mys = view.mode === 'search' ? null : await this.mysView(rec)
       const imgs = await renderPage(id, {
         who: who(this.e),
         summary: summarize(data, rec),
         syncedAt: fmtTime(data.syncedAt),
         updatedAt: fmtTime(rec?.updatedAt),
+        mys,
         ...view
       })
       return sendImages(this.e, imgs, view.title)
@@ -431,7 +516,9 @@ export class Achievement extends plugin {
   }
 
   async markUndone () {
-    return this.mark(false, this.e.msg.replace(/^#(原神)?成就(取消|撤销)(完成|标记)?/, ''))
+    const arg = this.e.msg.replace(/^#(原神)?成就(取消|撤销)(录入|完成|标记)?/, '').trim()
+    if (!arg) return this.reply('写上要取消的成就 ID 或名称，比如：#成就取消录入 81622')
+    return this.mark(false, arg)
   }
 
   async mark (done, arg) {
@@ -450,9 +537,9 @@ export class Achievement extends plugin {
     }
     const changed = ids.length ? markIds(GAME, this.e.user_id, ids, done) : []
     const lines = []
-    if (changed.length) lines.push(`已${done ? '标记完成' : '取消完成'}：${changed.map(id => data.byId.get(id)?.title || id).join('、')}`)
+    if (changed.length) lines.push(`已${done ? '标记完成' : '取消完成'}：${changed.map(id => label(data.byId.get(id)) || id).join('、')}`)
     const same = ids.filter(id => !changed.includes(id))
-    if (same.length) lines.push(`本来就${done ? '已完成' : '未完成'}：${same.map(id => data.byId.get(id)?.title || id).join('、')}`)
+    if (same.length) lines.push(`本来就${done ? '已完成' : '未完成'}：${same.map(id => label(data.byId.get(id)) || id).join('、')}`)
     lines.push(...problems)
     if (changed.length) {
       const sum = summarize(data, loadRecord(GAME, this.e.user_id))
@@ -484,6 +571,27 @@ export class Achievement extends plugin {
       logger.warn(`[${pluginName}] 发送成就导出文件失败：${err.message}`)
     }
     return this.reply('当前适配器不支持发送文件，请联系主人到 data 目录下取出导出文件')
+  }
+
+  /** #成就对比：和米游社的成就达成数核对；绑定 UID、Cookie 之类的提示由原神插件自己回复 */
+  async compare () {
+    const rec = loadRecord(GAME, this.e.user_id)
+    const mys = await mysAchievementCount(this.e, { force: true })
+    if (mys.error) {
+      // 原神插件已经回复过「请先#绑定uid」等提示的，这里不再重复
+      if (/原神插件|超时/.test(mys.error)) return this.reply(`查不到米游社数据：${mys.error}`)
+      return true
+    }
+    const lines = [`UID ${mys.uid}：米游社显示已达成 ${mys.count} 个成就`]
+    if (!rec) {
+      lines.push('你还没有录入成就，发送 #成就录入 导入存档后就能核对')
+    } else {
+      lines.push(`插件记录：${rec.done.size} 个（更新于 ${fmtTime(rec.updatedAt)}）`)
+      const cmp = compareText(mys.count, rec.done.size)
+      lines.push(cmp.diff ? `→ ${cmp.text}` : '✅ 和米游社的成就数一致')
+    }
+    lines.push('米游社只给成就总数，具体是哪几个还得靠导出存档重新录入')
+    return this.reply(lines.join('\n'))
   }
 
   async clear () {

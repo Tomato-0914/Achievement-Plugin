@@ -8,6 +8,7 @@ const schemas = [
   { component: 'Divider', label: '基础设置' },
   { field: 'priority', label: '插件优先级', component: 'InputNumber', bottomHelpMessage: '数字越小越先响应，默认 -110（比观测枢图鉴的 -100 靠前）；修改后需重启', componentProps: { placeholder: '-110' } },
   { field: 'pageSize', label: '查漏每页条数', component: 'InputNumber', bottomHelpMessage: '#成就查漏 每页显示多少个成就，默认 40', componentProps: { min: 10, max: 200, placeholder: '40' } },
+  { field: 'mysCompare', label: '米游社成就数核对', component: 'Switch', bottomHelpMessage: '查漏、统计、录入时顺带和米游社的成就达成数核对，对不上时提醒记录可能过期了；需要原神插件和 #绑定uid，查不到时自动跳过' },
   { field: 'syncHour', label: '每日同步时间（点）', component: 'InputNumber', bottomHelpMessage: '每天几点检查 genshin-db 有没有新成就，0~23；修改后需重启', componentProps: { min: 0, max: 23, placeholder: '0' } },
 
   { component: 'Divider', label: '图片' },

@@ -1,0 +1,110 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<style>
+  /* 帮助图（#成就帮助 / #成就录入帮助）：和查漏、统计图同一套米色纸张风格 */
+  :root {
+    --bg: #F3F1ED; --card: #FAF9F6; --line: #E2D8C7; --line-deep: #D6C8B0;
+    --ink: #2E2A25; --ink-soft: #6F665A; --ink-faint: #A89E8E; --brown: #9C6B3C; --gold: #C9952B; --hl: #E0473E;
+    --sans: "Noto Sans CJK SC", "Source Han Sans SC", "HarmonyOS Sans SC", "Microsoft YaHei", "WenQuanYi Micro Hei", sans-serif;
+    --mono: "Cascadia Code", "Consolas", "Noto Sans Mono CJK SC", var(--sans);
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; background: var(--bg); }
+  body { font-family: var(--sans); color: var(--ink); font-size: 15px; line-height: 1.6; }
+  #container { position: relative; width: {{width}}px; padding: 36px 36px 22px; overflow: hidden;
+    background: repeating-linear-gradient(90deg, rgba(120, 100, 70, .025) 0 2px, transparent 2px 26px), var(--bg); }
+  .frame, .frame::after { position: absolute; border: 1.5px solid var(--line-deep); pointer-events: none; }
+  .frame { inset: 12px; border-radius: 18px; }
+  .frame::after { content: ""; inset: 5px; border-width: 1px; border-color: var(--line); border-radius: 14px; }
+  .corner { position: absolute; width: 10px; height: 10px; border-radius: 50%; border: 1.5px solid var(--line-deep); background: var(--bg); }
+  .corner.tl { left: 7px; top: 7px; } .corner.tr { right: 7px; top: 7px; } .corner.bl { left: 7px; bottom: 7px; } .corner.br { right: 7px; bottom: 7px; }
+
+  .head { position: relative; text-align: center; padding: 8px 0 20px; }
+  .head .seal { display: inline-flex; width: 58px; height: 58px; border-radius: 50%; border: 2px solid var(--gold); align-items: center; justify-content: center; color: var(--gold); margin-bottom: 6px; background: #FBF5E8; }
+  .head h1 { margin: 0; font-size: 36px; font-weight: 900; letter-spacing: 6px; }
+  .head p { margin: 6px 0 0; font-size: 14px; color: var(--ink-soft); }
+
+  .card { position: relative; background: var(--card); border-radius: 10px; box-shadow: 0 2px 10px rgba(120, 100, 70, .08); border: 1px solid rgba(226, 216, 199, .7); padding: 14px 20px 14px; margin-bottom: 14px; }
+  .card.admin { background: #FBF3EC; border-color: #E8C9A8; }
+  .card h2 { margin: 0; font-size: 19px; font-weight: 800; color: var(--brown); display: flex; align-items: center; gap: 8px; }
+  .card h2 svg { flex: none; }
+  .card .sub { margin: 2px 0 6px; font-size: 12.5px; color: var(--ink-soft); }
+  .row { display: flex; gap: 12px; padding: 8px 0; align-items: baseline; }
+  .row + .row { border-top: 1px dashed var(--line); }
+  .cmd { flex: none; min-width: 132px; font-family: var(--mono); font-size: 14px; font-weight: 700; color: var(--ink); background: #fff; border: 1px solid var(--line); border-radius: 5px; padding: 3px 9px; white-space: nowrap; text-align: center; }
+  .row.hot .cmd { border-color: var(--gold); color: var(--brown); background: #FFF8E8; }
+  .desc { flex: 1; min-width: 0; font-size: 13.5px; color: var(--ink-soft); }
+  .tag { font-size: 11px; font-weight: 700; color: #fff; background: var(--hl); border-radius: 4px; padding: 1px 7px; letter-spacing: 1px; }
+
+  .step { display: flex; gap: 14px; padding: 10px 0; }
+  .step + .step { border-top: 1px dashed var(--line); }
+  .num { flex: none; width: 30px; height: 30px; border-radius: 50%; background: var(--brown); color: #fff; font-weight: 800; display: flex; align-items: center; justify-content: center; }
+  .step b { display: block; font-size: 16px; }
+  .step span { font-size: 13.5px; color: var(--ink-soft); }
+  .link { display: inline-block; margin-top: 3px; font-family: var(--mono); font-size: 12.5px; color: var(--brown); background: #fff; border: 1px solid var(--line); border-radius: 4px; padding: 1px 7px; word-break: break-all; }
+  .way { display: flex; gap: 12px; padding: 9px 0; align-items: flex-start; }
+  .way + .way { border-top: 1px dashed var(--line); }
+  .way .key { flex: none; font-family: var(--mono); font-weight: 800; color: var(--brown); background: #fff; border: 1px solid var(--line); border-radius: 5px; padding: 2px 8px; }
+  .way.best .key { background: var(--brown); color: #fff; border-color: var(--brown); }
+  .way b { font-size: 15px; }
+  .way .desc { display: block; margin-top: 1px; }
+  .notes { margin: 0; padding: 0 0 0 18px; font-size: 13px; color: var(--ink-soft); }
+  .notes li { margin: 3px 0; }
+
+  .foot { position: relative; margin-top: 8px; display: flex; flex-direction: column; gap: 2px; font-size: 11.5px; color: var(--ink-faint); text-align: center; }
+</style>
+</head>
+<body style="{{bodyStyle}}">
+<div id="container">
+  <div class="frame"></div>
+  <i class="corner tl"></i><i class="corner tr"></i><i class="corner bl"></i><i class="corner br"></i>
+
+  <div class="head">
+    <div class="seal"><svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M8 21h8M12 17v4M7 4h10v5a5 5 0 0 1-10 0V4z"/><path d="M17 5h3v2a3 3 0 0 1-3 3M7 5H4v2a3 3 0 0 0 3 3"/></svg></div>
+    {{if mode === 'import'}}
+    <h1>成就录入帮助</h1>
+    <p>用 YaeAchievement 一次导出全部成就，再交给机器人</p>
+    {{else}}
+    <h1>原神成就</h1>
+    <p>录入存档 · 查漏补缺 · 进度统计{{if total}} · 当前收录 {{total}} 个成就{{/if}}</p>
+    {{/if}}
+  </div>
+
+  {{if mode === 'import'}}
+  <div class="card">
+    <h2>导出步骤</h2>
+    {{each steps s i}}
+    <div class="step"><div class="num">{{i + 1}}</div><div><b>{{s.title}}</b><span>{{s.desc}}</span>{{if s.link}}<br><span class="link">{{s.link}}</span>{{/if}}</div></div>
+    {{/each}}
+  </div>
+  <div class="card">
+    <h2>导出方式 <span class="tag">任选一种</span></h2>
+    {{each ways w}}
+    <div class="way{{if w.best}} best{{/if}}"><span class="key">[{{w.key}}]</span><div><b>{{w.name}}{{if w.best}}（推荐）{{/if}}</b><span class="desc">{{w.desc}}</span></div></div>
+    {{/each}}
+  </div>
+  <div class="card admin">
+    <h2>注意</h2>
+    <ul class="notes">{{each notes n}}<li>{{n}}</li>{{/each}}</ul>
+  </div>
+  {{else}}
+  {{each sections s}}
+  <div class="card{{if s.admin}} admin{{/if}}">
+    <h2>{{s.title}}{{if s.admin}} <span class="tag">仅主人</span>{{/if}}</h2>
+    {{if s.sub}}<p class="sub">{{s.sub}}</p>{{/if}}
+    {{each s.items it}}
+    <div class="row{{if it.hot}} hot{{/if}}"><span class="cmd">{{it.cmd}}</span><span class="desc">{{it.desc}}</span></div>
+    {{/each}}
+  </div>
+  {{/each}}
+  {{/if}}
+
+  <footer class="foot">
+    <span>成就数据整理自 genshin-db（MIT）{{if syncedAt}} · 同步于 {{syncedAt}}{{/if}}</span>
+    <span>Achievement-Plugin{{if version}} v{{version}}{{/if}} · {{time}}</span>
+  </footer>
+</div>
+</body>
+</html>
