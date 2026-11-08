@@ -65,10 +65,10 @@ export async function mysAchievementCount (e, { silent = false, force = false } 
   return data
 }
 
-/** 对比结果的说明：diff = 米游社 - 记录 */
+/** 对比结果，一句话说明：diff = 米游社 - 本地记录 */
 export function compareText (mysCount, recCount) {
   const diff = mysCount - recCount
-  if (!diff) return { diff, level: 'ok', text: '和米游社的成就数一致' }
-  if (diff > 0) return { diff, level: 'warn', text: `游戏里多完成了 ${diff} 个，记录可能过期了，建议重新导出存档后 #成就录入` }
-  return { diff, level: 'info', text: `记录比米游社多 ${-diff} 个：可能是手动标记错了，或者米游社数据还没刷新（战绩数据有延迟）` }
+  if (!diff) return { diff, level: 'ok', text: `本地记录与米游社一致（${recCount} 个）` }
+  if (diff > 0) return { diff, level: 'warn', text: `米游社 ${mysCount} 个，本地 ${recCount} 个，游戏里多完成了 ${diff} 个，建议重新导出录入` }
+  return { diff, level: 'info', text: `本地 ${recCount} 个，比米游社多 ${-diff} 个，可能有录错的，或米游社数据还没刷新` }
 }
