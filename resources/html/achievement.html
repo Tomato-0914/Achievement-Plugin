@@ -27,7 +27,9 @@
   .head { position: relative; display: flex; align-items: center; gap: 12px; padding: 4px 6px 16px; }
   .head .cup { flex: none; width: 54px; height: auto; display: block; }
   .head .title { flex: 1; min-width: 0; }
-  .head h1 { margin: 0; font-size: 30px; font-weight: 900; letter-spacing: 3px; line-height: 1.25; }
+  .head h1 { margin: 0; font-size: 30px; font-weight: 900; letter-spacing: 3px; line-height: 1.25; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .head h1.long { font-size: 24px; letter-spacing: 1px; }
+  .head h1.xlong { font-size: 20px; letter-spacing: 0; }
   .head .sub { font-size: 13.5px; color: var(--ink-soft); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .head .sub b { color: var(--brown); }
   .head .badge { flex: none; text-align: right; }
@@ -94,6 +96,11 @@
   .bar i { position: absolute; left: 0; top: 0; bottom: 0; border-radius: 4px; background: linear-gradient(90deg, #E2BC6E, var(--gold)); }
   .bar.full i { background: linear-gradient(90deg, #8DC27F, var(--done)); }
 
+  /* 页码：放在列表下面居中 */
+  .pager { position: relative; display: flex; justify-content: center; margin: 2px 0 10px; }
+  .pager span { font-size: 13px; color: var(--ink-soft); background: var(--card); border: 1px solid var(--line); border-radius: 20px; padding: 3px 16px; }
+  .pager b { color: var(--brown); font-size: 15px; }
+
   .tips { position: relative; margin-top: 2px; padding: 0 6px; font-size: 12.5px; color: var(--ink-soft); }
   .tips p { margin: 2px 0; }
   .foot { position: relative; flex: none; margin-top: 14px; display: flex; flex-direction: column; gap: 2px; font-size: 11.5px; color: var(--ink-faint); text-align: center; }
@@ -106,8 +113,8 @@
   <div class="head">
     <img class="cup" src="{{trophy}}">
     <div class="title">
-      <h1>{{title}}</h1>
-      <div class="sub">{{@ sub}}</div>
+      <h1 class="{{if title.length > 16}}xlong{{else if title.length > 11}}long{{/if}}">{{title}}</h1>
+      {{if sub}}<div class="sub">{{@ sub}}</div>{{/if}}
     </div>
     {{if right}}
     <div class="badge">
@@ -171,6 +178,8 @@
   {{else}}
     <div class="empty">{{empty}}</div>
   {{/if}}
+
+  {{if pager}}<div class="pager"><span>第 <b>{{pager.page}}</b> / {{pager.pages}} 页</span></div>{{/if}}
 
   {{if tips && tips.length}}<div class="tips">{{each tips t}}<p>· {{@ t}}</p>{{/each}}</div>{{/if}}
 

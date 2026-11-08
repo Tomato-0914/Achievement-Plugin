@@ -462,7 +462,6 @@ export class Achievement extends plugin {
     const filterParts = []
     if (conds.length) filterParts.push(`筛选：${conds.join(' · ')}`)
     if (conds.length || pages > 1) filterParts.push(`共 <b>${pool.length}</b> 个未完成，<b>${primo}</b> 原石`)
-    if (pages > 1) filterParts.push(`第 <b>${page}</b>/${pages} 页`)
 
     const tips = []
     const base = `#成就查漏${arg ? ` ${arg}` : ''}`
@@ -479,6 +478,7 @@ export class Achievement extends plugin {
       mode: 'missing',
       title: '成就查漏',
       filter: filterParts.join('；'),
+      pager: pages > 1 ? { page, pages, count: pool.length } : null,
       groups: groupItems(data, items, rec).map(g => ({ ...g, items: g.items.map(a => decorate(a, rec)) })),
       empty: conds.length ? '这个范围内的成就都完成啦' : '全部成就都完成啦！',
       tips
@@ -539,6 +539,9 @@ export class Achievement extends plugin {
     }
     if (!list.length && explicit) list = search(data, q)
     if (!list.length) return explicit ? this.reply(`没找到和「${q}」有关的成就`) : false
+    // 排序（在分页之前排）：录入过成就的，没达成的排最前面；再按版本号从新到旧，同版本保持游戏里的顺序（多阶段成就挨在一起）
+    const byVer = arr => arr.map((a, i) => [a, i]).sort((x, y) => cmpVersion(y[0].version || '0', x[0].version || '0') || x[1] - y[1]).map(([a]) => a)
+    list = rec ? [...byVer(list.filter(a => !rec.done.has(a.id))), ...byVer(list.filter(a => rec.done.has(a.id)))] : byVer(list)
 
     // 一律出图，排版照游戏里的成就列表：徽章、名称描述、原石、达成状态（有完成时间的显示日期）
     const size = pageSize()
@@ -554,8 +557,9 @@ export class Achievement extends plugin {
     const safeQ = q.replace(/[<>&"]/g, '')
     return this.renderSend('query', {
       mode: 'query',
-      title: '成就查询',
-      sub: `「<b>${ver ? `${ver} 版本新增` : safeQ}</b>」共 ${list.length} 个成就${pages > 1 ? `，第 ${page}/${pages} 页` : ''}`,
+      title: `成就查询·${ver ? `${ver} 版本新增` : safeQ}`,
+      sub: '',
+      pager: pages > 1 ? { page, pages, count: list.length } : null,
       right: rec ? { big: list.filter(a => rec.done.has(a.id)).length, total: list.length, label: '已达成' } : null,
       groups: groupItems(data, shown, rec).map(g => ({ ...g, items: g.items.map(a => decorate(a, rec)) })),
       tips,
