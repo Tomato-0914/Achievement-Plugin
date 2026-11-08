@@ -149,26 +149,6 @@
     {{else}}
       <div class="empty">{{empty}}</div>
     {{/if}}
-  {{else if mode === 'search'}}
-    {{if filter}}<div class="filter">{{@ filter}}</div>{{/if}}
-    {{each groups g}}
-    <div class="group">
-      <div class="group-head"><h2>{{g.name}}</h2><span class="cnt">进度 {{g.done}}/{{g.total}}</span></div>
-      {{each g.items a}}
-      <div class="item{{if a.done}} done{{/if}}">
-        <div class="main">
-          <div class="name">{{a.title}}{{if a.stages > 1}}<span class="tag stage">{{a.stage}}/{{a.stages}}</span>{{/if}}{{if a.hidden}}<span class="tag hidden">隐藏</span>{{/if}}{{if a.version}}<span class="tag ver">{{a.version}}</span>{{/if}}</div>
-          <div class="desc">{{a.desc}}</div>
-        </div>
-        <div class="side">
-          <div class="primo">{{a.primo}} 原石</div>
-          {{if hasRecord}}<div class="state {{a.done ? 'ok' : 'no'}}">{{a.done ? '已完成' : '未完成'}}</div>{{/if}}
-          <div class="id">#{{a.id}}</div>
-        </div>
-      </div>
-      {{/each}}
-    </div>
-    {{/each}}
   {{else}}
     {{each sections sec}}
     <div class="grid-title">{{sec.title}}</div>

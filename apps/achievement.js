@@ -7,12 +7,25 @@ import { getAchievements, syncAchievements, syncing, formatSync, scheduleAchieve
 import { parseFile, parseText, parseJson } from '../model/importer.js'
 import { loadRecord, applyImport, markIds, deleteRecord, toUiaf } from '../model/store.js'
 import { mysAchievementCount, compareText } from '../model/mys.js'
+import { pathToFileURL } from 'node:url'
 
 /** 原神成就：录入、查漏、统计、查询。成就数据来自 genshin-db，见 model/data.js */
 
 const GAME = 'gs'
 const MAX_FILE = 10 * 1024 * 1024
 const HELP_TPL = path.join(pluginRoot, 'resources', 'html', 'help.html')
+const QUERY_TPL = path.join(pluginRoot, 'resources', 'html', 'query.html')
+const img = name => pathToFileURL(path.join(pluginRoot, 'resources', 'img', name)).href
+
+/**
+ * 成就徽章（透明底 PNG，resources/img/badge-<星数>-<亮几颗>.png）：
+ * 单阶段成就 1 颗星，达成白、未达成暗；三阶段成就 3 颗星，第 k 阶段达成时亮 k 颗、没达成亮 k-1 颗。
+ * 没录入成就时按达成显示
+ */
+function badgeOf (a, done) {
+  if (a.stages >= 3) return img(`badge-3-${Math.max(0, Math.min(3, done ? a.stage : a.stage - 1))}.png`)
+  return img(`badge-1-${done ? 1 : 0}.png`)
+}
 const IMPORT_PROMPT = '请发送成就文件（json/xlsx/csv）或椰羊分享链接'
 
 /** 贴进来的文字是不是一份存档（JSON，或者带 ID 表头的 CSV）；否则当作要标记的成就 ID / 名称 */
@@ -458,24 +471,48 @@ export class Achievement extends plugin {
     const exactGroup = groups.length === 1 && norm(groups[0].name) === norm(q)
     const inGroups = gs => data.list.filter(a => gs.some(g => g.id === a.groupId))
     let list = resolve(data, q)
-    if (!list.length && (exactGroup || (explicit && groups.length))) list = inGroups(groups)
+    let byGroup = false
+    if (!list.length && (exactGroup || (explicit && groups.length))) {
+      list = inGroups(groups)
+      byGroup = true
+    }
     if (!list.length && explicit) list = search(data, q)
     if (!list.length) return explicit ? this.reply(`没找到和「${q}」有关的成就`) : false
 
-    if (list.length <= 3) return this.reply(list.map(a => this.textOf(a, rec)).join('\n\n'))
-
-    const size = pageSize() * 2
-    const shown = list.slice(0, size)
-    return this.renderSend('search', {
-      mode: 'search',
+    // 一律出图，排版照游戏里的成就列表：徽章、名称描述、原石、达成状态（有完成时间的显示日期）
+    const shown = list.slice(0, pageSize())
+    const date = sec => sec ? new Date(sec * 1000).toLocaleDateString('zh-CN', { timeZone: 'Asia/Shanghai', year: 'numeric', month: '2-digit', day: '2-digit' }) : ''
+    const items = a => {
+      const done = !!rec?.done.has(a.id)
+      return { ...a, done, date: done ? date(rec.done.get(a.id)) : '', badge: badgeOf(a, done || !rec) }
+    }
+    const tips = []
+    if (list.length > shown.length) tips.push('写具体一点可以缩小范围，比如加上特辑名或描述里的字')
+    if (!rec) tips.push('录入成就后可以看到每个成就是否达成：<b>#成就录入</b>')
+    const view = {
       title: '成就查询',
+      query: q,
+      count: list.length,
+      shown: shown.length,
+      more: list.length > shown.length,
       hasRecord: !!rec,
-      filter: `「<b>${q.replace(/[<>&]/g, '')}</b>」共 <b>${list.length}</b> 个成就${list.length > shown.length ? `，只显示前 ${shown.length} 个，写具体一点可以缩小范围` : ''}`,
-      groups: groupItems(data, shown, rec).map(g => ({ ...g, items: g.items.map(a => ({ ...a, done: !!rec?.done.has(a.id) })) })),
-      tips: rec ? [] : ['录入成就后可以看到每个成就是否完成：<b>#成就录入</b>']
-    }, data, rec)
+      doneCount: rec ? list.filter(a => rec.done.has(a.id)).length : 0,
+      groups: groupItems(data, shown, rec).map(g => ({ ...g, showHead: byGroup, items: g.items.map(items) })),
+      trophy: img('trophy.png'),
+      primo: img('primo.png'),
+      tips,
+      syncedAt: fmtTime(data.syncedAt),
+      updatedAt: fmtTime(rec?.updatedAt)
+    }
+    try {
+      return sendImages(this.e, await renderPage('query', view, QUERY_TPL), '成就查询')
+    } catch (err) {
+      logger.error(err)
+      return this.reply(shown.slice(0, 5).map(a => this.textOf(a, rec)).join('\n\n'))
+    }
   }
 
+  /** 出图失败时的纯文字兜底 */
   textOf (a, rec) {
     const tags = [a.group, a.stages > 1 ? `第 ${a.stage}/${a.stages} 阶段` : '', a.hidden ? '隐藏成就' : '', a.version ? `${a.version} 版本` : ''].filter(Boolean)
     const lines = [`【${a.title}】#${a.id}`, tags.join(' · '), a.desc, `奖励：原石 ×${a.primo}`]
@@ -493,7 +530,7 @@ export class Achievement extends plugin {
   async renderSend (id, view, data, rec) {
     try {
       // 先核对米游社（10 分钟内有缓存；静默查询最多等 8 秒，查不到就不显示），再出图
-      const mys = view.mode === 'search' ? null : await this.mysView(rec)
+      const mys = await this.mysView(rec)
       const imgs = await renderPage(id, {
         who: who(this.e),
         summary: summarize(data, rec),

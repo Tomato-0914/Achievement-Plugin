@@ -87,6 +87,7 @@ function flattenItem (key, item, ver) {
       // 多阶段成就的描述里进度是占位符（「获得{param0}枚攻炼武勋」），换成这个阶段的目标数
       desc: String(st.description || '').replace(/\{param0\}/g, st.progress ?? '').trim(),
       primo: Number(st.reward?.count) || 0,
+      progress: Number(st.progress) || 1,
       stage: s,
       stages,
       hidden: !!item.isHidden,
