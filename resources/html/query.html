@@ -17,7 +17,7 @@
     background: radial-gradient(ellipse at 20% -10%, rgba(229, 194, 126, .16), transparent 55%), linear-gradient(180deg, var(--night2), var(--night1)); }
 
   .head { display: flex; align-items: center; gap: 12px; padding: 0 6px 16px; color: var(--gold); }
-  .head .cup { flex: none; width: 44px; height: 44px; }
+  .head .cup { flex: none; width: 50px; height: auto; display: block; }
   .head h1 { margin: 0; font-size: 26px; font-weight: 800; letter-spacing: 3px; }
   .head .q { margin-top: 1px; font-size: 13.5px; color: #C9C0AE; }
   .head .q b { color: var(--gold); }
@@ -32,9 +32,9 @@
   .group span { font-size: 12px; font-weight: 400; color: var(--ink-soft); }
   .group::after { content: ""; flex: 1; height: 1px; background: linear-gradient(90deg, #CDB894, transparent); align-self: center; }
 
-  .row { display: flex; align-items: stretch; background: var(--row); border: 1.5px solid var(--row-line); margin-bottom: 8px; min-height: 92px; }
-  .badge { flex: none; width: 92px; display: flex; align-items: center; justify-content: center; padding: 6px; }
-  .badge svg { width: 78px; height: 78px; display: block; }
+  .row { display: flex; align-items: stretch; background: var(--row); border: 1.5px solid var(--row-line); margin-bottom: 8px; min-height: 84px; }
+  .badge { flex: none; width: 82px; display: flex; align-items: center; justify-content: center; padding: 6px 4px 6px 8px; }
+  .badge img { width: 64px; height: auto; display: block; }
   .main { flex: 1; min-width: 0; padding: 12px 10px 10px 2px; display: flex; flex-direction: column; justify-content: center; }
   .title { font-size: 18px; font-weight: 800; color: var(--ink); }
   .title .tag { display: inline-block; margin-left: 6px; font-size: 11px; font-weight: 700; border-radius: 3px; padding: 0 6px; line-height: 18px; vertical-align: 2px; }
@@ -44,16 +44,15 @@
   .desc { margin-top: 3px; font-size: 13.5px; color: var(--ink-soft); }
   .meta { margin-top: 3px; font-size: 11.5px; color: var(--ink-faint); }
 
-  .primo { flex: none; align-self: center; width: 62px; height: 62px; margin: 0 12px; border-radius: 4px; position: relative; overflow: hidden;
-    background: linear-gradient(160deg, #E9B865, #B97A3A); border: 1px solid #A06A30; box-shadow: inset 0 0 0 1px rgba(255, 240, 200, .5); }
-  .primo svg { position: absolute; left: 11px; top: 4px; width: 40px; height: 40px; filter: drop-shadow(0 1px 2px rgba(60, 30, 0, .4)); }
-  .primo b { position: absolute; left: 0; right: 0; bottom: 0; height: 18px; line-height: 18px; text-align: center; font-size: 13px; font-weight: 800; color: #fff; background: rgba(40, 32, 30, .82); }
+  /* 原石：用原石图标做底，底部压一条同色的深色条放数字（图标自带的深色条太窄，数字会压到原石尖上） */
+  .primo { flex: none; align-self: center; width: 60px; height: 59px; margin: 0 12px; position: relative; border-radius: 9px; overflow: hidden; background: center / 100% 100% no-repeat; }
+  .primo b { position: absolute; left: 0; right: 0; bottom: 0; height: 17px; line-height: 17px; text-align: center; font-size: 13px; font-weight: 800; color: #fff; background: #3A2C27; }
 
   .state { flex: none; width: 128px; background: var(--side); border-left: 1.5px solid var(--row-line); display: flex; align-items: center; justify-content: center; text-align: center; }
-  .stamp { width: 104px; height: 74px; border: 1.5px solid #CDBC9C; border-radius: 50%; display: flex; flex-direction: column; align-items: center; justify-content: center; color: #9B8768;
-    background: radial-gradient(circle, rgba(255, 255, 255, .45), transparent 70%); }
-  .stamp b { font-size: 16px; font-weight: 800; letter-spacing: 2px; }
-  .stamp span { font-size: 12.5px; color: #A8977C; }
+  /* 达成：不加框，亮绿色字 */
+  .stamp { display: flex; flex-direction: column; align-items: center; justify-content: center; }
+  .stamp b { font-size: 19px; font-weight: 900; letter-spacing: 3px; color: #4FA84A; text-shadow: 0 1px 0 rgba(255, 255, 255, .7), 0 0 10px rgba(90, 180, 80, .3); }
+  .stamp span { margin-top: 2px; font-size: 12.5px; color: #A8977C; }
   .todo { color: #B4A58D; font-size: 16px; font-weight: 700; }
   .todo span { display: block; font-size: 12px; font-weight: 400; margin-top: 2px; }
   .none { color: #BDB09B; font-size: 13px; }
@@ -66,7 +65,7 @@
 <body style="{{bodyStyle}}">
 <div id="container">
   <div class="head">
-    <svg class="cup" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M8 21h8M12 17v4M7 4h10v5a5 5 0 0 1-10 0V4z"/><path d="M17 5h3v2a3 3 0 0 1-3 3M7 5H4v2a3 3 0 0 0 3 3"/></svg>
+    <img class="cup" src="{{trophy}}">
     <div>
       <h1>成就查询</h1>
       <div class="q">「<b>{{query}}</b>」共 {{count}} 个成就{{if more}}，只显示前 {{shown}} 个{{/if}}</div>
@@ -79,13 +78,13 @@
     {{if groups.length > 1 || g.showHead}}<div class="group">{{g.name}}<span>{{if hasRecord}}进度 {{g.done}}/{{g.total}}{{else}}共 {{g.total}} 个{{/if}}</span></div>{{/if}}
     {{each g.items a}}
     <div class="row">
-      <div class="badge">{{@ a.badge}}</div>
+      <div class="badge"><img src="{{a.badge}}"></div>
       <div class="main">
         <div class="title">{{a.title}}{{if a.stages > 1}}<span class="tag stage">{{a.stage}}/{{a.stages}}</span>{{/if}}{{if a.hidden}}<span class="tag hidden">隐藏</span>{{/if}}{{if a.version}}<span class="tag ver">{{a.version}}</span>{{/if}}</div>
         <div class="desc">{{a.desc}}</div>
         <div class="meta">#{{a.id}}{{if groups.length === 1 && !g.showHead}} · {{a.group}}{{/if}}</div>
       </div>
-      <div class="primo">{{@ primoSvg}}<b>{{a.primo}}</b></div>
+      <div class="primo" style="background-image: url('{{primo}}')"><b>{{a.primo}}</b></div>
       <div class="state">
         {{if !hasRecord}}<span class="none">未录入</span>
         {{else if a.done}}<div class="stamp"><b>达成</b>{{if a.date}}<span>{{a.date}}</span>{{/if}}</div>

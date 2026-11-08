@@ -7,7 +7,7 @@ import { getAchievements, syncAchievements, syncing, formatSync, scheduleAchieve
 import { parseFile, parseText, parseJson } from '../model/importer.js'
 import { loadRecord, applyImport, markIds, deleteRecord, toUiaf } from '../model/store.js'
 import { mysAchievementCount, compareText } from '../model/mys.js'
-import { badgeSvg, PRIMO_SVG } from '../model/badge.js'
+import { pathToFileURL } from 'node:url'
 
 /** 原神成就：录入、查漏、统计、查询。成就数据来自 genshin-db，见 model/data.js */
 
@@ -15,6 +15,17 @@ const GAME = 'gs'
 const MAX_FILE = 10 * 1024 * 1024
 const HELP_TPL = path.join(pluginRoot, 'resources', 'html', 'help.html')
 const QUERY_TPL = path.join(pluginRoot, 'resources', 'html', 'query.html')
+const img = name => pathToFileURL(path.join(pluginRoot, 'resources', 'img', name)).href
+
+/**
+ * 成就徽章（透明底 PNG，resources/img/badge-<星数>-<亮几颗>.png）：
+ * 单阶段成就 1 颗星，达成白、未达成暗；三阶段成就 3 颗星，第 k 阶段达成时亮 k 颗、没达成亮 k-1 颗。
+ * 没录入成就时按达成显示
+ */
+function badgeOf (a, done) {
+  if (a.stages >= 3) return img(`badge-3-${Math.max(0, Math.min(3, done ? a.stage : a.stage - 1))}.png`)
+  return img(`badge-1-${done ? 1 : 0}.png`)
+}
 const IMPORT_PROMPT = '请发送成就文件（json/xlsx/csv）或椰羊分享链接'
 
 /** 贴进来的文字是不是一份存档（JSON，或者带 ID 表头的 CSV）；否则当作要标记的成就 ID / 名称 */
@@ -473,7 +484,7 @@ export class Achievement extends plugin {
     const date = sec => sec ? new Date(sec * 1000).toLocaleDateString('zh-CN', { timeZone: 'Asia/Shanghai', year: 'numeric', month: '2-digit', day: '2-digit' }) : ''
     const items = a => {
       const done = !!rec?.done.has(a.id)
-      return { ...a, done, date: done ? date(rec.done.get(a.id)) : '', badge: badgeSvg(a.stage, done || !rec) }
+      return { ...a, done, date: done ? date(rec.done.get(a.id)) : '', badge: badgeOf(a, done || !rec) }
     }
     const tips = []
     if (list.length > shown.length) tips.push('写具体一点可以缩小范围，比如加上特辑名或描述里的字')
@@ -487,7 +498,8 @@ export class Achievement extends plugin {
       hasRecord: !!rec,
       doneCount: rec ? list.filter(a => rec.done.has(a.id)).length : 0,
       groups: groupItems(data, shown, rec).map(g => ({ ...g, showHead: byGroup, items: g.items.map(items) })),
-      primoSvg: PRIMO_SVG,
+      trophy: img('trophy.png'),
+      primo: img('primo.png'),
       tips,
       syncedAt: fmtTime(data.syncedAt),
       updatedAt: fmtTime(rec?.updatedAt)
