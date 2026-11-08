@@ -80,7 +80,7 @@ pageSize: 40
 renderScale: 150
 ```
 
-装了[锅巴插件](https://github.com/guoba-yunzai/guoba-plugin)的话，也可以在锅巴面板里改，保存后写入 `config/config.yaml`。
+装了[锅巴插件](https://github.com/guoba-yunzai/guoba-plugin)的话，也可以在锅巴面板里改（分「基础设置」「图片设置」两个页签），保存后写入 `config/config.yaml`，只改面板里的项，自己加的其他配置原样保留；数值超出范围会自动改到范围内。
 
 - `priority`：默认 -110。比[观测枢图鉴（Tomato-Plugin）](https://github.com/Tomato-0914/Tomato-Plugin)的 -100 靠前，`#成就图鉴` 这类消息不会被图鉴的模糊匹配接走。改完重启生效
 - `pageSize`：`#成就查漏`、`#成就查询` 每页显示多少个成就，默认 30，一页正好一张图；调大的话图超过 `render.pageHeight` 会被切成多张
@@ -88,7 +88,7 @@ renderScale: 150
 - `buttons`：帮助、查漏、查询、统计的图片下面带按钮，默认开。只有 QQ 官方 Bot（QQBot 适配器）支持，其他适配器自动不加。按钮：帮助「录入 查询 / 查漏 统计 导出」，查漏「查漏 统计 导出」，查询和统计「查询 查漏 统计」；录入、查询是输入按钮（填进输入框，补完内容再发），其余点了直接执行
 - `mysCompare`：查漏、统计、录入时顺带和米游社的成就达成数核对，默认开
 - `syncHour`：每天几点检查一次 genshin-db 有没有新成就，默认 0 点；插件启动后也会先检查一次。改完重启生效
-- `renderScale`：图片渲染精度，50~300，默认 100
+- `renderScale`：图片渲染精度，50~300（%），默认 100；数值越大图片越清晰，体积也越大，保存后立即生效
 - `render.quality` / `render.pageHeight`：JPEG 质量 / 图片超过多高切成多张
 
 ## 数据
