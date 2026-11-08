@@ -73,14 +73,16 @@ git clone https://github.com/Tomato-0914/Achievement-Plugin.git ./plugins/Achiev
 
 ## 配置
 
-`config/default.yaml` 是默认配置，升级时会被覆盖。要改的话新建 `config/config.yaml`，只写想覆盖的项，例如：
+`config/default.yaml` 是默认配置，插件更新时会被覆盖，不要改它。插件首次启动会把它（连同注释）复制成 `config/config.yaml`，要改配置就改这个文件，例如：
 
 ```yaml
 pageSize: 40
 renderScale: 150
 ```
 
-装了[锅巴插件](https://github.com/guoba-yunzai/guoba-plugin)的话，也可以在锅巴面板里改（分「基础设置」「图片设置」两个页签），保存后写入 `config/config.yaml`，只改面板里的项，自己加的其他配置原样保留；数值超出范围会自动改到范围内。
+`config/config.yaml` 不进 git，插件更新不会覆盖它；新版本加了配置项时，启动时会自动补进去（带上说明注释），你改过的值和注释都保留。文件格式写错时插件不会动它，先用默认配置，并在日志里提醒。
+
+装了[锅巴插件](https://github.com/guoba-yunzai/guoba-plugin)的话，也可以在锅巴面板里改（分「基础设置」「图片设置」两个页签），保存后写入 `config/config.yaml`，只改面板里的项，注释和自己加的其他配置都原样保留；数值超出范围会自动改到范围内。
 
 - `priority`：默认 -110。比[观测枢图鉴（Tomato-Plugin）](https://github.com/Tomato-0914/Tomato-Plugin)的 -100 靠前，`#成就图鉴` 这类消息不会被图鉴的模糊匹配接走。改完重启生效
 - `pageSize`：`#成就查漏`、`#成就查询` 每页显示多少个成就，默认 30，一页正好一张图；调大的话图超过 `render.pageHeight` 会被切成多张

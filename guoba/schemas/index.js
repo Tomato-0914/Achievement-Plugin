@@ -1,7 +1,4 @@
-import fs from 'node:fs'
-import path from 'node:path'
-import YAML from 'yaml'
-import { getConfig, readYaml, USER_FILE, pluginName } from '../../model/config.js'
+import { getConfig, saveUserConfig, pluginName } from '../../model/config.js'
 import basic from './basic.js'
 import image from './image.js'
 
@@ -33,17 +30,16 @@ export function getConfigData () {
   return structuredClone(getConfig())
 }
 
-/* -------------- 写入配置：只改表单里的项，写进 config/config.yaml，其余内容原样保留 -------------- */
+/* -------------- 写入配置：只改表单里的项，写进 config/config.yaml，注释和其他内容原样保留 -------------- */
 export function setConfigData (data, { Result }) {
   try {
-    const user = readYaml(USER_FILE)
+    const values = {}
     for (const field of FIELDS) {
       const value = valueOf(data, field)
       if (value === undefined) continue
-      setPath(user, field, FIX[field] ? FIX[field](value) : value)
+      values[field] = FIX[field] ? FIX[field](value) : value
     }
-    fs.mkdirSync(path.dirname(USER_FILE), { recursive: true })
-    fs.writeFileSync(USER_FILE, YAML.stringify(user))
+    saveUserConfig(values)
     return Result.ok({}, '保存成功辣~ (*´･ω･)з')
   } catch (err) {
     logger.error(`[${pluginName}] 锅巴保存配置失败`)
@@ -60,11 +56,4 @@ export function setConfigData (data, { Result }) {
 function valueOf (data, field) {
   if (Object.hasOwn(data, field)) return data[field]
   return field.split('.').reduce((o, k) => (o && typeof o === 'object' ? o[k] : undefined), data)
-}
-
-function setPath (obj, key, value) {
-  const keys = key.split('.')
-  let o = obj
-  for (const k of keys.slice(0, -1)) o = o[k] && typeof o[k] === 'object' ? o[k] : (o[k] = {})
-  o[keys[keys.length - 1]] = value
 }
