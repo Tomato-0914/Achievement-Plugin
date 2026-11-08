@@ -350,7 +350,7 @@ export class Achievement extends plugin {
     if (unknown) lines.push(`有 ${unknown} 个 ID 不在当前成就数据里（可能是新版本成就，数据更新后会自动算上）`)
     if (mysCompare()) {
       const mys = await mysAchievementCount(e, { silent: true, force: true })
-      if (!mys.error) lines.push(`米游社显示已达成 ${mys.count} 个，${compareText(mys.count, record.done.size).text}`)
+      if (!mys.error) lines.push(compareText(mys.count, record.done.size).text)
     }
     lines.push('发送 #成就查漏 查看未完成的成就')
     await this.reply(lines.join('\n'))
@@ -409,7 +409,7 @@ export class Achievement extends plugin {
     const tips = []
     if (pages > page) tips.push(`下一页发送 <b>#成就查漏${arg ? ` ${arg}` : ''}${version ? ` ${version}` : ''}${hiddenOnly ? ' 隐藏' : ''} ${page + 1}</b>`)
     if (!conds.length && pool.length > size) tips.push('未完成的太多了，可以按特辑查：<b>#成就查漏 天地万象</b>；或按版本：<b>#成就查漏 6.x</b>')
-    tips.push('完成了可以发 <b>#成就完成 ID</b> 标记，或者重新 <b>#成就录入</b> 最新存档')
+    tips.push('完成了可以发 <b>#成就录入 ID</b> 标记，或者重新 <b>#成就录入</b> 最新存档')
 
     return this.renderSend('missing', {
       mode: 'missing',
@@ -582,16 +582,8 @@ export class Achievement extends plugin {
       if (/原神插件|超时/.test(mys.error)) return this.reply(`查不到米游社数据：${mys.error}`)
       return true
     }
-    const lines = [`UID ${mys.uid}：米游社显示已达成 ${mys.count} 个成就`]
-    if (!rec) {
-      lines.push('你还没有录入成就，发送 #成就录入 导入存档后就能核对')
-    } else {
-      lines.push(`插件记录：${rec.done.size} 个（更新于 ${fmtTime(rec.updatedAt)}）`)
-      const cmp = compareText(mys.count, rec.done.size)
-      lines.push(cmp.diff ? `→ ${cmp.text}` : '✅ 和米游社的成就数一致')
-    }
-    lines.push('米游社只给成就总数，具体是哪几个还得靠导出存档重新录入')
-    return this.reply(lines.join('\n'))
+    if (!rec) return this.reply(`米游社显示已达成 ${mys.count} 个，你还没有录入成就`)
+    return this.reply(compareText(mys.count, rec.done.size).text)
   }
 
   async clear () {
