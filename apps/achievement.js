@@ -539,6 +539,8 @@ export class Achievement extends plugin {
     }
     if (!list.length && explicit) list = search(data, q)
     if (!list.length) return explicit ? this.reply(`没找到和「${q}」有关的成就`) : false
+    // 录入过成就的：没达成的排最前面（在分页之前排，第 1 页先看到没完成的），其余保持原来的顺序
+    if (rec) list = [...list.filter(a => !rec.done.has(a.id)), ...list.filter(a => rec.done.has(a.id))]
 
     // 一律出图，排版照游戏里的成就列表：徽章、名称描述、原石、达成状态（有完成时间的显示日期）
     const size = pageSize()
