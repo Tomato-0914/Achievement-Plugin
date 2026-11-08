@@ -14,7 +14,6 @@ import { pathToFileURL } from 'node:url'
 const GAME = 'gs'
 const MAX_FILE = 10 * 1024 * 1024
 const HELP_TPL = path.join(pluginRoot, 'resources', 'html', 'help.html')
-const QUERY_TPL = path.join(pluginRoot, 'resources', 'html', 'query.html')
 const img = name => pathToFileURL(path.join(pluginRoot, 'resources', 'img', name)).href
 
 /**
@@ -26,6 +25,14 @@ function badgeOf (a, done) {
   if (a.stages >= 3) return img(`badge-3-${Math.max(0, Math.min(3, done ? a.stage : a.stage - 1))}.png`)
   return img(`badge-1-${done ? 1 : 0}.png`)
 }
+const fmtDate = sec => sec ? new Date(sec * 1000).toLocaleDateString('zh-CN', { timeZone: 'Asia/Shanghai', year: 'numeric', month: '2-digit', day: '2-digit' }) : ''
+
+/** 成就行要用到的显示字段：是否达成、达成日期、徽章图 */
+function decorate (a, rec) {
+  const done = !!rec?.done.has(a.id)
+  return { ...a, done, date: done ? fmtDate(rec.done.get(a.id)) : '', badge: badgeOf(a, done || !rec) }
+}
+
 const IMPORT_PROMPT = '请发送成就文件（json/xlsx/csv）或椰羊分享链接'
 
 /** 贴进来的文字是不是一份存档（JSON，或者带 ID 表头的 CSV）；否则当作要标记的成就 ID / 名称 */
@@ -257,6 +264,7 @@ export class Achievement extends plugin {
         notes: importNotes,
         total: data?.list.length || 0,
         syncedAt: fmtTime(data?.syncedAt),
+        trophy: img('trophy.png'),
         version
       }, HELP_TPL)
       return sendImages(this.e, imgs, '成就帮助')
@@ -428,7 +436,7 @@ export class Achievement extends plugin {
       mode: 'missing',
       title: '成就查漏',
       filter: filterParts.join('；'),
-      groups: groupItems(data, items, rec),
+      groups: groupItems(data, items, rec).map(g => ({ ...g, items: g.items.map(a => decorate(a, rec)) })),
       empty: conds.length ? '这个范围内的成就都完成啦' : '全部成就都完成啦！',
       tips
     }, data, rec)
@@ -481,35 +489,19 @@ export class Achievement extends plugin {
 
     // 一律出图，排版照游戏里的成就列表：徽章、名称描述、原石、达成状态（有完成时间的显示日期）
     const shown = list.slice(0, pageSize())
-    const date = sec => sec ? new Date(sec * 1000).toLocaleDateString('zh-CN', { timeZone: 'Asia/Shanghai', year: 'numeric', month: '2-digit', day: '2-digit' }) : ''
-    const items = a => {
-      const done = !!rec?.done.has(a.id)
-      return { ...a, done, date: done ? date(rec.done.get(a.id)) : '', badge: badgeOf(a, done || !rec) }
-    }
     const tips = []
     if (list.length > shown.length) tips.push('写具体一点可以缩小范围，比如加上特辑名或描述里的字')
     if (!rec) tips.push('录入成就后可以看到每个成就是否达成：<b>#成就录入</b>')
-    const view = {
+    const safeQ = q.replace(/[<>&"]/g, '')
+    return this.renderSend('query', {
+      mode: 'query',
       title: '成就查询',
-      query: q,
-      count: list.length,
-      shown: shown.length,
-      more: list.length > shown.length,
-      hasRecord: !!rec,
-      doneCount: rec ? list.filter(a => rec.done.has(a.id)).length : 0,
-      groups: groupItems(data, shown, rec).map(g => ({ ...g, showHead: byGroup, items: g.items.map(items) })),
-      trophy: img('trophy.png'),
-      primo: img('primo.png'),
+      sub: `「<b>${safeQ}</b>」共 ${list.length} 个成就${list.length > shown.length ? `，只显示前 ${shown.length} 个` : ''}`,
+      right: rec ? { big: list.filter(a => rec.done.has(a.id)).length, total: list.length, label: '已达成' } : null,
+      groups: groupItems(data, shown, rec).map(g => ({ ...g, items: g.items.map(a => decorate(a, rec)) })),
       tips,
-      syncedAt: fmtTime(data.syncedAt),
-      updatedAt: fmtTime(rec?.updatedAt)
-    }
-    try {
-      return sendImages(this.e, await renderPage('query', view, QUERY_TPL), '成就查询')
-    } catch (err) {
-      logger.error(err)
-      return this.reply(shown.slice(0, 5).map(a => this.textOf(a, rec)).join('\n\n'))
-    }
+      fallback: () => shown.slice(0, 5).map(a => this.textOf(a, rec)).join('\n\n')
+    }, data, rec, { mys: false })
   }
 
   /** 出图失败时的纯文字兜底 */
@@ -527,22 +519,30 @@ export class Achievement extends plugin {
     return mys.error ? null : { ...mys, ...compareText(mys.count, rec.done.size) }
   }
 
-  async renderSend (id, view, data, rec) {
+  /** 查漏 / 查询 / 统计出图（共用 resources/html/achievement.html）；mys 为 false 时不核对米游社 */
+  async renderSend (id, view, data, rec, { mys: withMys = true } = {}) {
+    const { fallback, ...rest } = view
     try {
       // 先核对米游社（10 分钟内有缓存；静默查询最多等 8 秒，查不到就不显示），再出图
-      const mys = await this.mysView(rec)
+      const mys = withMys ? await this.mysView(rec) : null
+      const summary = summarize(data, rec)
       const imgs = await renderPage(id, {
-        who: who(this.e),
-        summary: summarize(data, rec),
+        sub: who(this.e).replace(/[<>&"]/g, ''),
+        summary,
+        right: { big: summary.done, total: summary.total, label: `完成度 ${summary.pct}%` },
+        hasRecord: !!rec,
+        trophy: img('trophy.png'),
+        primo: img('primo.png'),
+        totalAll: data.list.length,
         syncedAt: fmtTime(data.syncedAt),
         updatedAt: fmtTime(rec?.updatedAt),
         mys,
-        ...view
+        ...rest
       })
       return sendImages(this.e, imgs, view.title)
     } catch (err) {
       logger.error(err)
-      return this.reply(`${view.title}图片生成失败：${err.message}`)
+      return this.reply(fallback ? fallback() : `${view.title}图片生成失败：${err.message}`)
     }
   }
 
