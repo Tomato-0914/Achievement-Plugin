@@ -50,15 +50,15 @@ function renderScale () {
 }
 
 /**
- * 用 resources/html/achievement.html 出图，返回图片 Buffer 数组；超过 render.pageHeight 自动切成多张。
+ * 出图（默认用 resources/html/achievement.html），返回图片 Buffer 数组；超过 render.pageHeight 自动切成多张。
  * 调用方自己接住失败情况
  */
-export async function renderPage (id, view) {
+export async function renderPage (id, view, tplFile = TPL) {
   const r = getConfig().render || {}
   const scale = renderScale()
   // 注意：别用 path / resPath 这类字段名，Yunzai 渲染器会拿去当保存路径
   const data = {
-    tplFile: TPL,
+    tplFile,
     saveId: `achievement_${id}`,
     imgType: 'jpeg',
     quality: r.quality || 90,
