@@ -51,6 +51,25 @@ function versionBreakdown (list) {
   return [...count].sort((a, b) => parseInt(b[0]) - parseInt(a[0]))
 }
 
+/** 版本号比较：'7.2' > '7.10' 这种按数字比，不按字符串比 */
+function cmpVersion (a, b) {
+  const [a1 = 0, a2 = 0] = String(a).split('.').map(Number)
+  const [b1 = 0, b2 = 0] = String(b).split('.').map(Number)
+  return a1 - b1 || a2 - b2
+}
+
+/** 成就数据里最新的版本号（genshin-db 收录新版本后自动跟上） */
+function latestVersion (data) {
+  return data.list.reduce((best, a) => a.version && cmpVersion(a.version, best) > 0 ? a.version : best, '0.0')
+}
+
+/** 「版本新增」「当前版本」「7.2」「7.2版本」「7.2新增」→ 版本号（关键词取最新版本）；不是版本查询返回 '' */
+function versionQuery (q, data) {
+  const m = String(q).replace(/\s+/g, '').match(/^(?:(\d+\.\d+)(?:版本)?(?:新增)?(?:成就)?|版本新增|新增成就|最新版本|当前版本(?:新增)?|新版本)$/)
+  if (!m) return ''
+  return m[1] || latestVersion(data)
+}
+
 /** 「#成就查漏 天地万象 1.x（98）· 2.x（120）…」这样的一行提示 */
 function versionTip (cmd, list) {
   const vs = versionBreakdown(list)
@@ -509,7 +528,10 @@ export class Achievement extends plugin {
     const groups = findGroups(data, q)
     const exactGroup = groups.length === 1 && norm(groups[0].name) === norm(q)
     const inGroups = gs => data.list.filter(a => gs.some(g => g.id === a.groupId))
-    let list = resolve(data, q)
+    // 「#成就查询 版本新增」/「#成就版本新增」：最新版本新增的成就；「#成就查询 7.1」：指定版本
+    const ver = versionQuery(q, data)
+    let list = ver ? data.list.filter(a => a.version === ver) : resolve(data, q)
+    if (ver && !list.length) return this.reply(`没有 ${ver} 版本新增的成就数据`)
     let byGroup = false
     if (!list.length && (exactGroup || (explicit && groups.length))) {
       list = inGroups(groups)
@@ -527,12 +549,13 @@ export class Achievement extends plugin {
     if (pages > page) tips.push(`下一页发送 <b>#成就查询 ${q} ${page + 1}</b>`)
     // 查整个特辑又很多页：提示只看没完成的
     if (pages > 2 && byGroup && rec) tips.push(`只看没完成的发 <b>#成就查漏 ${q}</b>，还可以加版本缩小范围，如 <b>#成就查漏 ${q} 6.x</b>`)
+    if (ver && rec && list.some(a => !rec.done.has(a.id))) tips.push(`只看这个版本没完成的发 <b>#成就查漏 ${ver}</b>`)
     if (!rec) tips.push('录入成就后可以看到每个成就是否达成：<b>#成就录入</b>')
     const safeQ = q.replace(/[<>&"]/g, '')
     return this.renderSend('query', {
       mode: 'query',
       title: '成就查询',
-      sub: `「<b>${safeQ}</b>」共 ${list.length} 个成就${pages > 1 ? `，第 ${page}/${pages} 页` : ''}`,
+      sub: `「<b>${ver ? `${ver} 版本新增` : safeQ}</b>」共 ${list.length} 个成就${pages > 1 ? `，第 ${page}/${pages} 页` : ''}`,
       right: rec ? { big: list.filter(a => rec.done.has(a.id)).length, total: list.length, label: '已达成' } : null,
       groups: groupItems(data, shown, rec).map(g => ({ ...g, items: g.items.map(a => decorate(a, rec)) })),
       tips,
