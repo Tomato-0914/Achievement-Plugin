@@ -180,6 +180,7 @@ const BTN = {
 }
 const BUTTONS = {
   help: [['录入', '查询', '查漏'], ['统计', '导出'], ['录入帮助']],
+  import: [['录入', '帮助']],
   missing: [['查漏', '统计', '导出'], ['帮助']],
   query: [['查询', '查漏', '统计'], ['帮助']],
   stats: [['查询', '查漏', '统计'], ['帮助']]
@@ -338,7 +339,8 @@ export class Achievement extends plugin {
         trophy: img('trophy.png'),
         version
       }, HELP_TPL)
-      return sendImages(this.e, imgs, '成就帮助', buttonsOf(this.e, 'help'))
+      // 帮助和录入帮助各用各的按钮（录入帮助：录入 帮助）
+      return sendImages(this.e, imgs, '成就帮助', buttonsOf(this.e, mode === 'import' ? 'import' : 'help'))
     } catch (err) {
       logger.error(err)
       return this.reply(fallback())
