@@ -171,16 +171,18 @@ const who = e => {
  */
 const BTN = {
   录入: { text: '录入', input: '#成就录入' },
-  查询: { text: '查询', input: '#成就查询 ' },
+  查询: { text: '查询', input: '#成就查询' },
   查漏: { text: '查漏', callback: '#成就查漏' },
   统计: { text: '统计', callback: '#成就统计' },
-  导出: { text: '导出', callback: '#成就导出' }
+  导出: { text: '导出', callback: '#成就导出' },
+  帮助: { text: '帮助', callback: '#成就帮助' },
+  录入帮助: { text: '录入帮助', callback: '#成就录入帮助' }
 }
 const BUTTONS = {
-  help: [['录入', '查询'], ['查漏', '统计', '导出']],
-  missing: [['查漏', '统计', '导出']],
-  query: [['查询', '查漏', '统计']],
-  stats: [['查询', '查漏', '统计']]
+  help: [['录入', '查询', '查漏'], ['统计', '导出'], ['录入帮助']],
+  missing: [['查漏', '统计', '导出'], ['帮助']],
+  query: [['查询', '查漏', '统计'], ['帮助']],
+  stats: [['查询', '查漏', '统计'], ['帮助']]
 }
 function buttonsOf (e, kind) {
   if (getConfig().buttons === false || !BUTTONS[kind]) return null
