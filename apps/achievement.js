@@ -5,6 +5,7 @@ import { renderPage } from '../model/render.js'
 import { getAchievements, syncAchievements, syncing, formatSync, scheduleAchievementSync } from '../model/data.js'
 import { parseFile, parseText } from '../model/importer.js'
 import { loadRecord, applyImport, markIds, deleteRecord, toUiaf } from '../model/store.js'
+import { mysAchievementCount, compareText } from '../model/mys.js'
 
 /** 原神成就：录入、查漏、统计、查询。成就数据来自 genshin-db，见 model/data.js */
 
@@ -12,6 +13,8 @@ const GAME = 'gs'
 const MAX_FILE = 10 * 1024 * 1024
 
 const pageSize = () => Math.max(10, Number(getConfig().pageSize) || 40)
+/** 查漏、统计、录入时顺带和米游社的成就达成数核对（需要原神插件和绑定的 UID，查不到就不显示） */
+const mysCompare = () => getConfig().mysCompare !== false
 
 scheduleAchievementSync(GAME, Math.min(23, Math.max(0, Number(getConfig().syncHour) || 0)))
 
@@ -24,6 +27,7 @@ const HELP = [
   '#成就查询 关键词：按名称、描述或 ID 搜索，如 #成就查询 甘撒、#成就 登月；发特辑名（#成就查询 天地万象）看整个特辑',
   '#成就完成 名称或ID / #成就取消 名称或ID：手动标记，可以一次写多个（空格分开）',
   '#成就导出：导出成 UIAF json 文件（可导入椰羊、胡桃工具箱）',
+  '#成就对比：和米游社显示的成就达成数核对，看记录是不是过期了（需要 #绑定uid；米游社只给总数，不给每个成就的完成情况）',
   '#清空成就记录：删除自己的成就记录',
   '#成就更新：立即从 genshin-db 同步成就数据（主人；插件每天也会自动同步）',
   '#更新成就插件：从 git 更新插件本身并重启（主人）'
@@ -50,7 +54,8 @@ function summarize (data, rec) {
     }
   }
   const total = data.list.length
-  return { done, total, missing: total - done, pct: percent(done, total), primoDone, primoMissing: primoAll - primoDone }
+  // recorded：记录里的全部 ID 数（含成就数据里还没有的新成就），和米游社的达成数比较用
+  return { done, total, missing: total - done, pct: percent(done, total), primoDone, primoMissing: primoAll - primoDone, recorded: rec?.done.size || 0 }
 }
 
 /** 按特辑分组：groups 里每项带 done/total/missing/primoMissing，items 是传入的成就 */
@@ -171,6 +176,7 @@ export class Achievement extends plugin {
         { reg: '^#(原神)?成就(完成|标记|打卡)\\s*(.+)$', fnc: 'markDone' },
         { reg: '^#(原神)?成就(取消|撤销)(完成|标记)?\\s*(.+)$', fnc: 'markUndone' },
         { reg: '^#(原神)?成就导出$', fnc: 'exportCmd' },
+        { reg: '^#(原神)?成就(对比|核对|校对)$', fnc: 'compare' },
         { reg: '^#(原神)?(清空|删除)(我的)?成就(记录|存档)$', fnc: 'clear' },
         { reg: '^#(原神)?成就(查询|搜索|查找)?\\s*(.+)$', fnc: 'query' }
       ]
@@ -277,6 +283,10 @@ export class Achievement extends plugin {
       `当前进度 ${sum.done}/${sum.total}（${sum.pct}%），未完成 ${sum.missing} 个，还能拿 ${sum.primoMissing} 原石`
     ]
     if (unknown) lines.push(`有 ${unknown} 个 ID 不在当前成就数据里（可能是新版本成就，数据更新后会自动算上）`)
+    if (mysCompare()) {
+      const mys = await mysAchievementCount(e, { silent: true, force: true })
+      if (!mys.error) lines.push(`米游社显示已达成 ${mys.count} 个，${compareText(mys.count, record.done.size).text}`)
+    }
     lines.push('发送 #成就查漏 查看未完成的成就')
     await this.reply(lines.join('\n'))
     return true
@@ -408,13 +418,23 @@ export class Achievement extends plugin {
     return lines.join('\n')
   }
 
+  /** 查漏、统计图上的米游社核对结果；关掉了、没记录或查不到时返回 null */
+  async mysView (rec) {
+    if (!rec || !mysCompare()) return null
+    const mys = await mysAchievementCount(this.e, { silent: true })
+    return mys.error ? null : { ...mys, ...compareText(mys.count, rec.done.size) }
+  }
+
   async renderSend (id, view, data, rec) {
     try {
+      // 先核对米游社（10 分钟内有缓存；静默查询最多等 8 秒，查不到就不显示），再出图
+      const mys = view.mode === 'search' ? null : await this.mysView(rec)
       const imgs = await renderPage(id, {
         who: who(this.e),
         summary: summarize(data, rec),
         syncedAt: fmtTime(data.syncedAt),
         updatedAt: fmtTime(rec?.updatedAt),
+        mys,
         ...view
       })
       return sendImages(this.e, imgs, view.title)
@@ -484,6 +504,27 @@ export class Achievement extends plugin {
       logger.warn(`[${pluginName}] 发送成就导出文件失败：${err.message}`)
     }
     return this.reply('当前适配器不支持发送文件，请联系主人到 data 目录下取出导出文件')
+  }
+
+  /** #成就对比：和米游社的成就达成数核对；绑定 UID、Cookie 之类的提示由原神插件自己回复 */
+  async compare () {
+    const rec = loadRecord(GAME, this.e.user_id)
+    const mys = await mysAchievementCount(this.e, { force: true })
+    if (mys.error) {
+      // 原神插件已经回复过「请先#绑定uid」等提示的，这里不再重复
+      if (/原神插件|超时/.test(mys.error)) return this.reply(`查不到米游社数据：${mys.error}`)
+      return true
+    }
+    const lines = [`UID ${mys.uid}：米游社显示已达成 ${mys.count} 个成就`]
+    if (!rec) {
+      lines.push('你还没有录入成就，发送 #成就录入 导入存档后就能核对')
+    } else {
+      lines.push(`插件记录：${rec.done.size} 个（更新于 ${fmtTime(rec.updatedAt)}）`)
+      const cmp = compareText(mys.count, rec.done.size)
+      lines.push(cmp.diff ? `→ ${cmp.text}` : '✅ 和米游社的成就数一致')
+    }
+    lines.push('米游社只给成就总数，具体是哪几个还得靠导出存档重新录入')
+    return this.reply(lines.join('\n'))
   }
 
   async clear () {

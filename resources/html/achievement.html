@@ -48,6 +48,11 @@
   .stat.warn b { color: var(--hl); }
   .stat.primo b { color: var(--gold); }
 
+  .mys { position: relative; margin: -4px 0 14px; padding: 9px 14px; border-radius: 10px; font-size: 13.5px; line-height: 1.55; border: 1px solid; }
+  .mys b { font-weight: 800; }
+  .mys.warn { background: #FBEDE6; border-color: #EBC2AE; color: #9A4A2A; }
+  .mys.info { background: #EEF1F6; border-color: #C9D3E3; color: #4A5A78; }
+  .head .mys-ok { font-size: 12px; color: var(--done); margin-top: 2px; }
   .filter { position: relative; margin: -4px 4px 12px; font-size: 13px; color: var(--ink-soft); }
   .filter b { color: var(--brown); }
 
@@ -103,6 +108,7 @@
     <div class="badge">
       <div class="big">{{summary.done}}<small> / {{summary.total}}</small></div>
       <div class="pct">完成度 {{summary.pct}}%</div>
+      {{if mys && !mys.diff}}<div class="mys-ok">✓ 和米游社一致</div>{{/if}}
     </div>
   </div>
 
@@ -112,6 +118,10 @@
     <div class="stat primo"><b>{{summary.primoDone}}</b><span>已获得原石</span></div>
     <div class="stat primo"><b>{{summary.primoMissing}}</b><span>还能拿原石</span></div>
   </div>
+
+  {{if mys && mys.diff}}
+  <div class="mys {{mys.level}}">米游社（UID {{mys.uid}}）显示已达成 <b>{{mys.count}}</b> 个，记录里是 <b>{{summary.recorded}}</b> 个：{{mys.text}}</div>
+  {{/if}}
 
   {{if mode === 'missing'}}
     {{if filter}}<div class="filter">{{@ filter}}</div>{{/if}}
