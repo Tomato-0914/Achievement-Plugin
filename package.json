@@ -1,0 +1,8 @@
+{
+  "name": "Achievement-Plugin",
+  "version": "0.1.0",
+  "description": "Yunzai 原神成就插件：录入、查漏、统计、查询",
+  "type": "module",
+  "private": true,
+  "license": "MIT"
+}
