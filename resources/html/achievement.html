@@ -155,7 +155,7 @@
     <div class="group">
       <div class="group-head">
         <h2>{{g.name}}</h2>
-        <span class="cnt">{{if !hasRecord}}共 {{g.total}} 个{{else if mode === 'missing'}}未完成 <b>{{g.missing}}</b> · 进度 {{g.done}}/{{g.total}}{{else}}进度 {{g.done}}/{{g.total}}{{/if}}</span>
+        <span class="cnt">{{if !hasRecord}}共 {{g.total}} 个{{else if mode === 'missing'}}未完成 <b>{{g.missing}}</b> · 进度 {{g.done}}/{{g.total}}{{else if mode === 'query'}}已达成 {{g.done}}/{{g.total}}{{else}}进度 {{g.done}}/{{g.total}}{{/if}}</span>
       </div>
       {{each g.items a}}
       <div class="item">
