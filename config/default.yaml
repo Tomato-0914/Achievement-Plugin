@@ -12,6 +12,12 @@ pageSize: 30
 # 没装原神插件或没绑 UID 时自动跳过，不提示。#成就对比 不受这个开关影响
 mysCompare: true
 
+# 查漏、查询、统计出图前先回一句「查询中，请稍等...」
+renderTip: true
+
+# 帮助、查漏、查询、统计的图片下面带按钮（只有 QQ 官方 Bot 支持，其他适配器自动不加）
+buttons: true
+
 # 每天几点（0~23）检查一次 genshin-db 有没有新成就；插件启动后也会先检查一次
 syncHour: 0
 

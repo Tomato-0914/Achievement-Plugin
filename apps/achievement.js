@@ -165,17 +165,47 @@ const who = e => {
 }
 
 /** 图片超过 1 张时合并转发 */
-async function sendImages (e, imgs, title) {
+/**
+ * 按钮：只有 QQ 官方 Bot（QQBot 适配器）支持，其他适配器（icqq、OneBot 等）不加；配置 buttons: false 可以关掉。
+ * 录入、查询是输入按钮（填进输入框，用户补完再发），其余是回调按钮（点了直接执行）
+ */
+const BTN = {
+  录入: { text: '录入', input: '#成就录入' },
+  查询: { text: '查询', input: '#成就查询 ' },
+  查漏: { text: '查漏', callback: '#成就查漏' },
+  统计: { text: '统计', callback: '#成就统计' },
+  导出: { text: '导出', callback: '#成就导出' }
+}
+const BUTTONS = {
+  help: [['录入', '查询'], ['查漏', '统计', '导出']],
+  missing: [['查漏', '统计', '导出']],
+  query: [['查询', '查漏', '统计']],
+  stats: [['查询', '查漏', '统计']]
+}
+function buttonsOf (e, kind) {
+  if (getConfig().buttons === false || !BUTTONS[kind]) return null
+  if (e?.bot?.adapter?.id !== 'QQBot' || typeof segment === 'undefined' || typeof segment.button !== 'function') return null
+  return segment.button(...BUTTONS[kind].map(row => row.map(k => BTN[k])))
+}
+
+/** 发图：一张直接发（带按钮的话一起发）；多张合并转发，按钮另发一条 */
+async function sendImages (e, imgs, title, buttons = null) {
   const msgs = imgs.map(buf => segment.image(buf))
-  if (msgs.length <= 1) return e.reply(msgs[0])
+  if (msgs.length <= 1) return e.reply(buttons ? [msgs[0], buttons] : msgs[0])
+  let sent = false
   try {
-    if (typeof Bot !== 'undefined' && typeof Bot.makeForwardArray === 'function') return await e.reply(await Bot.makeForwardArray(msgs))
-    const { default: common } = await import('../../../lib/common/common.js')
-    return await e.reply(await common.makeForwardMsg(e, msgs, title))
+    if (typeof Bot !== 'undefined' && typeof Bot.makeForwardArray === 'function') {
+      await e.reply(await Bot.makeForwardArray(msgs))
+    } else {
+      const { default: common } = await import('../../../lib/common/common.js')
+      await e.reply(await common.makeForwardMsg(e, msgs, title))
+    }
+    sent = true
   } catch (err) {
     logger.warn(`[${pluginName}] 合并转发失败，改为逐条发送：${err.message}`)
   }
-  for (const m of msgs) await e.reply(m)
+  if (!sent) for (const m of msgs) await e.reply(m)
+  if (buttons) await e.reply(buttons)
   return true
 }
 
@@ -306,7 +336,7 @@ export class Achievement extends plugin {
         trophy: img('trophy.png'),
         version
       }, HELP_TPL)
-      return sendImages(this.e, imgs, '成就帮助')
+      return sendImages(this.e, imgs, '成就帮助', buttonsOf(this.e, 'help'))
     } catch (err) {
       logger.error(err)
       return this.reply(fallback())
@@ -591,6 +621,8 @@ export class Achievement extends plugin {
   /** 查漏 / 查询 / 统计出图（共用 resources/html/achievement.html）；mys 为 false 时不核对米游社 */
   async renderSend (id, view, data, rec, { mys: withMys = true } = {}) {
     const { fallback, ...rest } = view
+    // 出图要一两秒（还可能先查米游社），先回一句；配置 renderTip: false 关掉
+    if (getConfig().renderTip !== false) await this.reply('查询中，请稍等...')
     try {
       // 先核对米游社（10 分钟内有缓存；静默查询最多等 8 秒，查不到就不显示），再出图
       const mys = withMys ? await this.mysView(rec) : null
@@ -608,7 +640,7 @@ export class Achievement extends plugin {
         mys,
         ...rest
       })
-      return sendImages(this.e, imgs, view.title)
+      return sendImages(this.e, imgs, view.title, buttonsOf(this.e, view.mode))
     } catch (err) {
       logger.error(err)
       return this.reply(fallback ? fallback() : `${view.title}图片生成失败：${err.message}`)
