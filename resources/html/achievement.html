@@ -179,7 +179,7 @@
     <div class="empty">{{empty}}</div>
   {{/if}}
 
-  {{if pager}}<div class="pager"><span>第 <b>{{pager.page}}</b> / {{pager.pages}} 页 · 共 {{pager.count}} 个</span></div>{{/if}}
+  {{if pager}}<div class="pager"><span>第 <b>{{pager.page}}</b> / {{pager.pages}} 页</span></div>{{/if}}
 
   {{if tips && tips.length}}<div class="tips">{{each tips t}}<p>· {{@ t}}</p>{{/each}}</div>{{/if}}
 
