@@ -38,7 +38,25 @@ const IMPORT_PROMPT = '请发送成就文件（json/xlsx/csv）或椰羊分享�
 /** 贴进来的文字是不是一份存档（JSON，或者带 ID 表头的 CSV）；否则当作要标记的成就 ID / 名称 */
 const looksLikeArchive = text => /^[[{]/.test(text) || /^\uFEFF?"?(id|编号)"?\s*[,\t]/i.test(text)
 
-const pageSize = () => Math.max(10, Number(getConfig().pageSize) || 40)
+// 每页条数：默认 30，一页大约 3000 像素高，渲染出来正好一张图（超过 render.pageHeight 会被切成多张）
+const pageSize = () => Math.max(10, Number(getConfig().pageSize) || 30)
+
+/** 按大版本统计条数（新版本在前），列表太长时提示「按版本缩小范围」用 */
+function versionBreakdown (list) {
+  const count = new Map()
+  for (const a of list) {
+    const v = a.version ? `${a.version.split('.')[0]}.x` : ''
+    if (v) count.set(v, (count.get(v) || 0) + 1)
+  }
+  return [...count].sort((a, b) => parseInt(b[0]) - parseInt(a[0]))
+}
+
+/** 「#成就查漏 天地万象 1.x（98）· 2.x（120）…」这样的一行提示 */
+function versionTip (cmd, list) {
+  const vs = versionBreakdown(list)
+  if (vs.length < 2) return ''
+  return `太多了翻不完，可以按版本看：${vs.map(([v, n]) => `<b>${v}</b>（${n}）`).join(' · ')}，比如 <b>${cmd} ${vs[0][0]}</b>`
+}
 /** 查漏、统计、录入时顺带和米游社的成就达成数核对（需要原神插件和绑定的 UID，查不到就不显示） */
 const mysCompare = () => getConfig().mysCompare !== false
 
@@ -428,8 +446,14 @@ export class Achievement extends plugin {
     if (pages > 1) filterParts.push(`第 <b>${page}</b>/${pages} 页`)
 
     const tips = []
-    if (pages > page) tips.push(`下一页发送 <b>#成就查漏${arg ? ` ${arg}` : ''}${version ? ` ${version}` : ''}${hiddenOnly ? ' 隐藏' : ''} ${page + 1}</b>`)
-    if (!conds.length && pool.length > size) tips.push('未完成的太多了，可以按特辑查：<b>#成就查漏 天地万象</b>；或按版本：<b>#成就查漏 6.x</b>')
+    const base = `#成就查漏${arg ? ` ${arg}` : ''}`
+    if (pages > page) tips.push(`下一页发送 <b>${base}${version ? ` ${version}` : ''}${hiddenOnly ? ' 隐藏' : ''} ${page + 1}</b>`)
+    // 超过 2 页还没按版本筛：列出各大版本的条数，一步缩小范围
+    if (pages > 2 && !version) {
+      const vt = versionTip(base, pool)
+      if (vt) tips.push(vt)
+    }
+    if (!arg && pages > 2) tips.push('也可以按特辑查：<b>#成就查漏 天地万象</b>、<b>#成就查漏 至冬</b>')
     tips.push('完成了可以发 <b>#成就录入 ID</b> 标记，或者重新 <b>#成就录入</b> 最新存档')
 
     return this.renderSend('missing', {
@@ -460,14 +484,21 @@ export class Achievement extends plugin {
           full.length && { title: `已全部完成（${full.length}）`, groups: full }
         ].filter(Boolean)
       })(),
-      tips: ['发送 <b>#成就查漏</b> 看没完成的成就，<b>#成就查漏 特辑名</b> 只看某个特辑']
+      tips: ['发送 <b>#成就查漏</b> 看没完成的成就；只看某个特辑发 <b>#成就查漏 特辑名</b>，太多的话再加版本，如 <b>#成就查漏 天地万象 6.x</b>']
     }, data, rec)
   }
 
   async query () {
     const m = this.e.msg.match(/^#(原神)?成就(查询|搜索|查找)?\s*(.+)$/)
     const explicit = !!m?.[2]
-    const q = m?.[3]?.trim() || ''
+    let q = m?.[3]?.trim() || ''
+    // 「#成就查询 天地万象 2」：末尾 1~3 位数字是页码（成就 ID 是 5~6 位，不会混）
+    let page = 1
+    const pm = explicit && q.match(/^(.+?)\s+(?:第\s*)?(\d{1,3})\s*页?$/)
+    if (pm) {
+      q = pm[1].trim()
+      page = Math.max(1, Number(pm[2]))
+    }
     if (!q || q.length > 30) return false
     // 不带「查询」的 #成就xxx：只认 ID、完整的成就名或特辑名，对不上就放行，免得抢了别的插件的指令
     const data = explicit ? await this.data() : getAchievements(GAME)
@@ -488,15 +519,20 @@ export class Achievement extends plugin {
     if (!list.length) return explicit ? this.reply(`没找到和「${q}」有关的成就`) : false
 
     // 一律出图，排版照游戏里的成就列表：徽章、名称描述、原石、达成状态（有完成时间的显示日期）
-    const shown = list.slice(0, pageSize())
+    const size = pageSize()
+    const pages = Math.max(1, Math.ceil(list.length / size))
+    if (page > pages) return this.reply(`一共只有 ${pages} 页`)
+    const shown = list.slice((page - 1) * size, page * size)
     const tips = []
-    if (list.length > shown.length) tips.push('写具体一点可以缩小范围，比如加上特辑名或描述里的字')
+    if (pages > page) tips.push(`下一页发送 <b>#成就查询 ${q} ${page + 1}</b>`)
+    // 查整个特辑又很多页：提示只看没完成的
+    if (pages > 2 && byGroup && rec) tips.push(`只看没完成的发 <b>#成就查漏 ${q}</b>，还可以加版本缩小范围，如 <b>#成就查漏 ${q} 6.x</b>`)
     if (!rec) tips.push('录入成就后可以看到每个成就是否达成：<b>#成就录入</b>')
     const safeQ = q.replace(/[<>&"]/g, '')
     return this.renderSend('query', {
       mode: 'query',
       title: '成就查询',
-      sub: `「<b>${safeQ}</b>」共 ${list.length} 个成就${list.length > shown.length ? `，只显示前 ${shown.length} 个` : ''}`,
+      sub: `「<b>${safeQ}</b>」共 ${list.length} 个成就${pages > 1 ? `，第 ${page}/${pages} 页` : ''}`,
       right: rec ? { big: list.filter(a => rec.done.has(a.id)).length, total: list.length, label: '已达成' } : null,
       groups: groupItems(data, shown, rec).map(g => ({ ...g, items: g.items.map(a => decorate(a, rec)) })),
       tips,
