@@ -109,12 +109,14 @@ function summarize (data, rec) {
 
 /** 按特辑分组：groups 里每项带 done/total/missing/primoMissing，items 是传入的成就 */
 function groupItems (data, items, rec) {
+  // 分组卡片按成就在列表里第一次出现的顺序排（列表已经排好序了，比如查询按版本排），组内保持列表顺序
   const pick = new Map()
   for (const a of items) {
     if (!pick.has(a.groupId)) pick.set(a.groupId, [])
     pick.get(a.groupId).push(a)
   }
-  return data.groups.filter(g => pick.has(g.id)).map(g => ({ ...groupProgress(data, g, rec), items: pick.get(g.id) }))
+  const byId = new Map(data.groups.map(g => [g.id, g]))
+  return [...pick].filter(([id]) => byId.has(id)).map(([id, list]) => ({ ...groupProgress(data, byId.get(id), rec), items: list }))
 }
 
 function groupProgress (data, g, rec) {
@@ -539,8 +541,8 @@ export class Achievement extends plugin {
     }
     if (!list.length && explicit) list = search(data, q)
     if (!list.length) return explicit ? this.reply(`没找到和「${q}」有关的成就`) : false
-    // 排序（在分页之前排）：录入过成就的，没达成的排最前面；再按版本号从新到旧，同版本保持游戏里的顺序（多阶段成就挨在一起）
-    const byVer = arr => arr.map((a, i) => [a, i]).sort((x, y) => cmpVersion(y[0].version || '0', x[0].version || '0') || x[1] - y[1]).map(([a]) => a)
+    // 排序（在分页之前排）：录入过成就的，没达成的排最前面；再按版本号从旧到新，同版本保持游戏里的顺序（多阶段成就挨在一起）
+    const byVer = arr => arr.map((a, i) => [a, i]).sort((x, y) => cmpVersion(x[0].version || '0', y[0].version || '0') || x[1] - y[1]).map(([a]) => a)
     list = rec ? [...byVer(list.filter(a => !rec.done.has(a.id))), ...byVer(list.filter(a => rec.done.has(a.id)))] : byVer(list)
 
     // 一律出图，排版照游戏里的成就列表：徽章、名称描述、原石、达成状态（有完成时间的显示日期）
@@ -560,8 +562,12 @@ export class Achievement extends plugin {
       title: `成就查询·${ver ? `${ver} 版本新增` : safeQ}`,
       sub: '',
       pager: pages > 1 ? { page, pages, count: list.length } : null,
-      right: rec ? { big: list.filter(a => rec.done.has(a.id)).length, total: list.length, label: '已达成' } : null,
-      groups: groupItems(data, shown, rec).map(g => ({ ...g, items: g.items.map(a => decorate(a, rec)) })),
+      right: rec ? { big: list.filter(a => rec.done.has(a.id)).length, total: list.length, label: `共 ${list.length} 个 · 已达成` } : null,
+      // 分组标题的进度只算这次查到的成就（所有页），不是整个特辑，免得和下面列出来的对不上
+      groups: groupItems(data, shown, rec).map(g => {
+        const hit = list.filter(a => a.groupId === g.id)
+        return { ...g, total: hit.length, done: rec ? hit.filter(a => rec.done.has(a.id)).length : 0, items: g.items.map(a => decorate(a, rec)) }
+      }),
       tips,
       fallback: () => shown.slice(0, 5).map(a => this.textOf(a, rec)).join('\n\n')
     }, data, rec, { mys: false })
