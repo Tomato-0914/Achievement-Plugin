@@ -4,10 +4,14 @@ import { pluginName } from './config.js'
  * 米游社战绩首页（game_record/app/genshin/api/index）里的「成就达成数」：stats.achievement_number。
  * 米游社只给这个总数，不给每个成就的完成情况，所以只能用来核对插件里的记录是不是过期了。
  *
- * 不自己管 Cookie：直接用 Yunzai 原神插件（plugins/genshin）的 MysInfo，和 #原神卡片、#角色 走同一套
- * UID 绑定和公共 Cookie。查首页数据只要绑定了 UID 就行，不需要绑定自己的 Cookie。
+ * 不自己管 Cookie：直接用 Yunzai 原神插件（plugins/genshin）的 MysInfo，和 #原神卡片、#角色 走同一套绑定。
+ * 只绑定 UID 查不到，要用户自己绑定米游社 Cookie（#扫码登录）。
  * 没装原神插件（比如 TRSS 没装 Yunzai-genshin）时这个功能自动不可用，其余功能不受影响。
  */
+
+/** 没绑定 / 登录失效时给用户的提示 */
+export const BIND_TIP = '需要先绑定米游社账号：发送 #扫码登录，用米游社 APP 扫码绑定后再试'
+export const REBIND_TIP = '米游社账号登录失效了：发送 #扫码登录 重新绑定后再试'
 
 let MysInfo
 async function loadMysInfo () {
@@ -28,8 +32,8 @@ const timeout = ms => new Promise((resolve, reject) => setTimeout(() => reject(n
 
 /**
  * 查米游社显示的成就达成数，返回 { uid, count }；查不到返回 { error }。
- * silent：不让原神插件回复任何提示（查漏、统计、录入时顺带核对用，查不到就当没有）；
- * 否则「请先#绑定uid」「Cookie 失效」这类提示由原神插件自己回复。
+ * silent：不让原神插件回复任何提示，查不到时由调用方自己决定怎么提示（原神插件的「请先#绑定uid」容易让人以为绑 UID 就够了）。
+ * 返回的 error 里 needBind 为 true 表示没绑定米游社账号（Cookie）。
  * 同一个人 10 分钟内的结果直接用缓存，force 时重新查。
  */
 export async function mysAchievementCount (e, { silent = false, force = false } = {}) {
@@ -56,9 +60,15 @@ export async function mysAchievementCount (e, { silent = false, force = false } 
     if (!silent) logger.warn(`[${pluginName}] 米游社成就数查询失败：${err.message}`)
     return { error: err.message }
   }
-  if (!res) return { error: '没有绑定 UID 或没有可用的 Cookie' }
+  if (!res) return { error: '没有绑定米游社账号', needBind: true }
   const count = Number(res?.data?.stats?.achievement_number)
-  if (res.retcode !== 0 || !Number.isFinite(count)) return { error: res.message || `retcode=${res.retcode}` }
+  if (res.retcode !== 0 || !Number.isFinite(count)) {
+    const code = Number(res.retcode)
+    // 10102：米游社战绩没公开
+    if (code === 10102) return { error: '米游社战绩没有公开，请在米游社「我的 → 我的角色 → 战绩」里打开公开' }
+    // -100 / 10001 / 10103 之类是 Cookie 无效或过期，提示重新扫码绑定
+    return { error: res.message || `retcode=${res.retcode}`, needBind: [-100, 10001, 10103].includes(code) ? 'expired' : false }
+  }
 
   const data = { uid: String(ev.uid || ''), count }
   cache.set(key, { at: Date.now(), data })
