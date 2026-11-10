@@ -3,7 +3,7 @@ import path from 'node:path'
 import { getConfig, dataRoot, ensureDir, pluginName } from '../model/config.js'
 import { syncAchievements, formatSync, scheduleAchievementSync } from '../model/data.js'
 import { loadRecord, deleteRecord, toUiaf } from '../model/store.js'
-import { mysAchievementCount, compareText } from '../model/mys.js'
+import { mysAchievementCount, compareText, BIND_TIP, REBIND_TIP } from '../model/mys.js'
 import { GAME, pluginVersion } from '../model/achievement.js'
 import { ensureData } from '../model/reply.js'
 
@@ -28,14 +28,14 @@ export class AchievementManage extends plugin {
     })
   }
 
-  /** #成就对比：和米游社的成就达成数核对；绑定 UID、Cookie 之类的提示由原神插件自己回复 */
+  /** #成就对比：和米游社的成就达成数核对；查不到时自己提示（要 #扫码登录 绑定米游社账号，只绑 UID 不够） */
   async compare () {
     const rec = loadRecord(GAME, this.e.user_id)
-    const mys = await mysAchievementCount(this.e, { force: true })
+    const mys = await mysAchievementCount(this.e, { force: true, silent: true })
     if (mys.error) {
-      // 原神插件已经回复过「请先#绑定uid」等提示的，这里不再重复
-      if (/原神插件|超时/.test(mys.error)) return this.reply(`查不到米游社数据：${mys.error}`)
-      return true
+      if (mys.needBind === 'expired') return this.reply(`查不到米游社数据，${REBIND_TIP}`)
+      if (mys.needBind) return this.reply(`查不到米游社数据，${BIND_TIP}`)
+      return this.reply(`查不到米游社数据：${mys.error}`)
     }
     if (!rec) return this.reply(`米游社显示已达成 ${mys.count} 个，你还没有录入成就`)
     return this.reply(compareText(mys.count, rec.done.size).text)

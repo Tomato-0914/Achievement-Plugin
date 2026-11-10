@@ -70,7 +70,7 @@ git clone https://github.com/Tomato-0914/Achievement-Plugin.git ./plugins/Achiev
 - `#成就对比`：查米游社显示的达成数，和记录里的数量比较。游戏里多完成了就提醒重新导出存档录入；记录比米游社多时，可能是手动标记错了，也可能是米游社数据还没刷新
 - `#成就查漏`、`#成就统计` 的图上，数量对不上时顶部会出提醒，一致时显示「✓ 和米游社一致」；`#成就录入` 成功后也会顺带核对一次（配置 `mysCompare`，默认开）
 
-用的是 Yunzai 原神插件（`plugins/genshin`，Miao-Yunzai 自带，TRSS-Yunzai 要装 [Yunzai-genshin](https://github.com/TimeRainStarSky/Yunzai-genshin)）的 UID 绑定和公共 Cookie，和 `#原神卡片` 一样，只要 `#绑定uid` 过就能查，不需要绑定自己的 Cookie。没装原神插件或没绑 UID 时，查漏、统计里的核对自动跳过；`#成就对比` 会提示原因。结果 10 分钟内有缓存。
+用的是 Yunzai 原神插件（`plugins/genshin`，Miao-Yunzai 自带，TRSS-Yunzai 要装 [Yunzai-genshin](https://github.com/TimeRainStarSky/Yunzai-genshin)）的米游社账号绑定，用户要先发 `#扫码登录` 用米游社 APP 扫码绑定（只 `#绑定uid` 查不到）。没装原神插件或没绑定账号时，查漏、统计里的核对自动跳过；`#成就对比` 会提示发 `#扫码登录` 绑定。结果 10 分钟内有缓存。
 
 ## 配置
 

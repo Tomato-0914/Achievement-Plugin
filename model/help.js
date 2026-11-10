@@ -34,7 +34,7 @@ export const helpSections = [
     title: '管理记录',
     sub: '',
     items: [
-      { cmd: '#成就对比', desc: '和米游社显示的成就达成数核对（需要 #绑定uid）' },
+      { cmd: '#成就对比', desc: '和米游社显示的成就达成数核对（需要先 #扫码登录 绑定米游社账号）' },
       { cmd: '#成就导出', desc: '导出成 UIAF json，可以导回椰羊、胡桃工具箱' },
       { cmd: '#清空成就记录', desc: '删除自己的成就记录' }
     ]

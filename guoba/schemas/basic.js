@@ -50,7 +50,7 @@ export default [
     field: 'mysCompare',
     label: '米游社成就数核对',
     helpMessage: '查漏、统计、录入时顺带和米游社的成就达成数核对',
-    bottomHelpMessage: '数量对不上时提醒记录可能过期了；需要原神插件和 #绑定uid，查不到时自动跳过。#成就对比 不受这个开关影响',
+    bottomHelpMessage: '数量对不上时提醒记录可能过期了；需要原神插件，并且用户 #扫码登录 绑定过米游社账号（只绑 UID 查不到），查不到时自动跳过。#成就对比 不受这个开关影响',
     component: 'Switch'
   }
 ]
