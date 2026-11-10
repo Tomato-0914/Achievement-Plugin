@@ -101,6 +101,31 @@
   .pager span { font-size: 13px; color: var(--ink-soft); background: var(--card); border: 1px solid var(--line); border-radius: 20px; padding: 3px 16px; }
   .pager b { color: var(--brown); font-size: 15px; }
 
+  /* 详情：标签行、名片、成就相关、补充说明、攻略推荐 */
+  .head .cup.set-icon { width: 64px; border-radius: 12px; box-shadow: 0 2px 8px rgba(60, 50, 40, .18); }
+  .chips { position: relative; display: flex; flex-wrap: wrap; gap: 6px; margin: -6px 4px 14px; }
+  .chips span { font-size: 12.5px; color: var(--brown); background: var(--card); border: 1px solid var(--line); border-radius: 20px; padding: 2px 12px; }
+  .namecard { position: relative; display: flex; align-items: center; gap: 16px; background: var(--card); border: 1px solid rgba(226, 216, 199, .8); border-radius: 10px; padding: 10px 16px; margin-bottom: 14px; box-shadow: 0 2px 10px rgba(120, 100, 70, .07); }
+  /* 名片图四周带透明留白，裁成名片的比例 */
+  .namecard img { flex: none; width: 168px; height: 105px; object-fit: cover; display: block; }
+  .nc-label { font-size: 12px; color: var(--ink-faint); }
+  .nc-name { font-size: 18px; font-weight: 800; color: var(--brown); }
+  .nc-tip { font-size: 12.5px; color: var(--ink-soft); margin-top: 2px; }
+  .sec { position: relative; background: var(--card); border-radius: 10px; border: 1px solid rgba(226, 216, 199, .8); box-shadow: 0 2px 10px rgba(120, 100, 70, .07); margin-bottom: 14px; overflow: hidden; }
+  .sec-head { padding: 9px 16px; background: linear-gradient(90deg, #F1E7D6, #F7F2E9); border-bottom: 1px solid var(--line); font-size: 16px; font-weight: 800; color: var(--brown); }
+  .sec-head small { font-size: 12px; font-weight: 400; color: var(--ink-faint); margin-left: 6px; }
+  .related { display: flex; flex-wrap: wrap; gap: 8px; padding: 12px 16px; }
+  .rel { display: inline-flex; align-items: center; gap: 6px; font-size: 13.5px; color: var(--ink); background: #fff; border: 1px solid var(--line); border-radius: 8px; padding: 4px 10px 4px 4px; }
+  .rel img { width: 30px; height: 30px; object-fit: contain; border-radius: 6px; background: #F4EEE3; }
+  .note { padding: 10px 16px 12px; font-size: 14px; line-height: 1.7; color: var(--ink); }
+  .note p { margin: 4px 0; }
+  .note img { display: block; max-width: 100%; height: auto; border-radius: 8px; margin: 6px 0; border: 1px solid var(--line); }
+  .strategy { display: flex; flex-direction: column; gap: 8px; padding: 12px 16px; }
+  .post { display: flex; align-items: center; gap: 12px; background: #fff; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; padding-right: 12px; }
+  .post img { flex: none; display: block; width: 128px; height: 72px; object-fit: cover; background: #F4EEE3; }
+  .post span { flex: 1; min-width: 0; padding: 8px 0 8px 12px; font-size: 14px; color: var(--ink); line-height: 1.5; }
+  .post img + span { padding-left: 0; }
+
   .tips { position: relative; margin-top: 2px; padding: 0 6px; font-size: 12.5px; color: var(--ink-soft); }
   .tips p { margin: 2px 0; }
   .foot { position: relative; flex: none; margin-top: 14px; display: flex; flex-direction: column; gap: 2px; font-size: 11.5px; color: var(--ink-faint); text-align: center; }
@@ -111,7 +136,7 @@
   <div class="frame"></div>
 
   <div class="head">
-    <img class="cup" src="{{trophy}}">
+    <img class="cup{{if headIcon}} set-icon{{/if}}" src="{{headIcon || trophy}}">
     <div class="title">
       <h1 class="{{if title.length > 16}}xlong{{else if title.length > 11}}long{{/if}}">{{title}}</h1>
       {{if sub}}<div class="sub">{{@ sub}}</div>{{/if}}
@@ -125,12 +150,25 @@
     {{/if}}
   </div>
 
-  {{if summary && mode !== 'query'}}
+  {{if summary && (mode === 'missing' || mode === 'stats')}}
   <div class="stats">
     <div class="stat"><b>{{summary.done}}</b><span>已完成</span></div>
     <div class="stat warn"><b>{{summary.missing}}</b><span>未完成</span></div>
     <div class="stat primo"><b>{{summary.primoDone}}</b><span>已获得原石</span></div>
     <div class="stat primo"><b>{{summary.primoMissing}}</b><span>还能拿原石</span></div>
+  </div>
+  {{/if}}
+
+  {{if chips && chips.length}}<div class="chips">{{each chips c}}<span>{{c}}</span>{{/each}}</div>{{/if}}
+
+  {{if namecard}}
+  <div class="namecard">
+    <img src="{{namecard.img}}">
+    <div class="nc-main">
+      <div class="nc-label">名片纹饰</div>
+      <div class="nc-name">{{namecard.name}}</div>
+      {{if namecard.tip}}<div class="nc-tip">{{namecard.tip}}</div>{{/if}}
+    </div>
   </div>
   {{/if}}
 
@@ -155,7 +193,7 @@
     <div class="group">
       <div class="group-head">
         <h2>{{g.name}}</h2>
-        <span class="cnt">{{if !hasRecord}}共 {{g.total}} 个{{else if mode === 'missing'}}未完成 <b>{{g.missing}}</b> · 进度 {{g.done}}/{{g.total}}{{else if mode === 'query'}}已达成 {{g.done}}/{{g.total}}{{else}}进度 {{g.done}}/{{g.total}}{{/if}}</span>
+        <span class="cnt">{{if !hasRecord}}共 {{g.total}} 个{{else if mode === 'missing'}}未完成 <b>{{g.missing}}</b> · 进度 {{g.done}}/{{g.total}}{{else if mode === 'query' || mode === 'detail' || mode === 'set'}}已达成 {{g.done}}/{{g.total}}{{else}}进度 {{g.done}}/{{g.total}}{{/if}}</span>
       </div>
       {{each g.items a}}
       <div class="item">
@@ -179,12 +217,37 @@
     <div class="empty">{{empty}}</div>
   {{/if}}
 
+  {{if related && related.length}}
+  <div class="sec">
+    <div class="sec-head">成就相关</div>
+    <div class="related">{{each related r}}<span class="rel">{{if r.img}}<img src="{{r.img}}">{{/if}}{{r.name}}</span>{{/each}}</div>
+  </div>
+  {{/if}}
+
+  {{if note}}
+  <div class="sec">
+    <div class="sec-head">补充说明</div>
+    <div class="note">{{@ note}}</div>
+  </div>
+  {{/if}}
+
+  {{if strategy && strategy.length}}
+  <div class="sec">
+    <div class="sec-head">攻略推荐 <small>来自米游社</small></div>
+    <div class="strategy">
+      {{each strategy s}}
+      <div class="post">{{if s.cover}}<img src="{{s.cover}}">{{/if}}<span>{{s.title}}</span></div>
+      {{/each}}
+    </div>
+  </div>
+  {{/if}}
+
   {{if pager}}<div class="pager"><span>第 <b>{{pager.page}}</b> / {{pager.pages}} 页</span></div>{{/if}}
 
   {{if tips && tips.length}}<div class="tips">{{each tips t}}<p>· {{@ t}}</p>{{/each}}</div>{{/if}}
 
   <footer class="foot">
-    <span>成就数据整理自 genshin-db（MIT）· 共 {{totalAll}} 个成就{{if syncedAt}} · 数据同步于 {{syncedAt}}{{/if}}{{if updatedAt}} · 记录更新于 {{updatedAt}}{{/if}}</span>
+    <span>成就数据整理自 genshin-db（MIT）{{if obcUsed}} · 详情来自米游社观测枢{{/if}} · 共 {{totalAll}} 个成就{{if syncedAt}} · 数据同步于 {{syncedAt}}{{/if}}{{if updatedAt}} · 记录更新于 {{updatedAt}}{{/if}}</span>
     <span>Achievement-Plugin · {{time}}</span>
   </footer>
 </div>
